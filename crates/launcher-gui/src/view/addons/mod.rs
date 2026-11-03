@@ -42,7 +42,8 @@ impl Lightforge {
 
     /// Addon management: what is installed, and what could be.
     pub(crate) fn addons_screen(&self) -> Element<'_, Message> {
-        let tab = |label: &'static str, which: AddonTab| {
+        let language = &self.config.interface_language;
+        let tab = |id: &'static str, label: String, which: AddonTab| {
             let entry = button(text(label).size(theme::LABEL)).padding(theme::tap([theme::SM, theme::MD]));
             let entry = match self.addon_tab == which {
                 true => entry.style(theme::selected),
@@ -51,17 +52,17 @@ impl Lightforge {
             // The open tab takes the ring too, so the row of tabs can be
             // walked without a gap where the current one is.
             focus::ring(
-                focus::Target::Key(format!("addon tab {label}")),
+                focus::Target::Key(format!("addon tab {id}")),
                 focus::Press::Send(Message::AddonTab(which)),
                 entry,
             )
         };
 
         let mut body = column![row![
-            tab("My Addons", AddonTab::Mine),
-            tab("Browse Addons", AddonTab::Browse),
-            tab("Import", AddonTab::Import),
-            tab("Export", AddonTab::Export),
+            tab("mine", i18n::text(language, "addons-tab-mine"), AddonTab::Mine),
+            tab("browse", i18n::text(language, "addons-tab-browse"), AddonTab::Browse),
+            tab("import", i18n::text(language, "addons-tab-import"), AddonTab::Import),
+            tab("export", i18n::text(language, "addons-tab-export"), AddonTab::Export),
         ]
         .spacing(theme::XS)]
         .spacing(theme::MD);
@@ -70,7 +71,7 @@ impl Lightforge {
             let progress = &self.addon_sample;
             body = body.push(
                 row![
-                    text(progress.line.clone()).size(theme::LABEL),
+                    text(crate::i18n::addon_progress_line(&self.config.interface_language, &progress.line)).size(theme::LABEL),
                     mono(format!("{}/{}", progress.done, progress.total)),
                 ]
                 .spacing(theme::SM)
@@ -78,7 +79,7 @@ impl Lightforge {
             );
         }
         if let Some(e) = &self.error {
-            body = body.push(problem(e));
+            body = body.push(problem(e, &self.config.interface_language));
         }
 
         body = body.push(match self.addon_tab {
@@ -93,13 +94,13 @@ impl Lightforge {
         let installed = self.addons.rows.iter().filter(|r| r.child_of.is_none()).count();
         let aside = muted(
             match installed {
-                1 => "1 addon installed".to_owned(),
-                n => format!("{n} addons installed"),
+                1 => i18n::text(language, "addons-installed-one"),
+                n => i18n::text_with_args(language, "addons-installed-many", &[("count", &n.to_string())]),
             },
             theme::LABEL,
         );
 
-        self.page("Addons", None, Some(aside.into()), body.into())
+        self.page(i18n::text(language, "settings-nav-addons"), None, Some(aside.into()), body.into())
     }
 
     /// What the last update check said about one installed addon, if it is
@@ -118,6 +119,7 @@ impl Lightforge {
     /// started from: a refusal from Browse belongs beside the search that
     /// produced it, not on a page of addons it never became.
     pub(crate) fn unavailable_rows(&self, tab: AddonTab) -> Vec<Element<'_, Message>> {
+        let language = &self.config.interface_language;
         let Some(report) = self.addon_report.as_ref().filter(|_| self.addon_report_tab == tab) else {
             return Vec::new();
         };
@@ -137,7 +139,7 @@ impl Lightforge {
                 if let Some(repo) = &item.github {
                     line = line.push(
                         secondary(
-                            "Get it from GitHub",
+                            &i18n::text(language, "menu-addon-get-from-github"),
                             Message::InstallAddon("github".to_owned(), repo.clone()),
                         )
                         .enabled(!self.addons_locked()),
@@ -145,11 +147,11 @@ impl Lightforge {
                 }
                 if let Some(url) = &item.website_url {
                     line = line.push(
-                        secondary("Open page", Message::OpenUrl(url.clone())).enabled(true),
+                        secondary(&i18n::text(language, "addons-open-page"), Message::OpenUrl(url.clone())).enabled(true),
                     );
                 }
                 line = line.push(
-                    secondary("Dismiss", Message::DismissUnavailable(item.name.clone())).enabled(true),
+                    secondary(&i18n::text(language, "common-dismiss"), Message::DismissUnavailable(item.name.clone())).enabled(true),
                 );
                 container(line).padding(theme::MD).style(theme::row).into()
             })

@@ -22,11 +22,11 @@ impl Lightforge {
                 };
                 // Any writer: the move reads one store and writes another.
                 if let Some(what) = self.store_writer() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", what)]).into());
                     return Ok(Task::none());
                 }
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 let moving = Moving {
@@ -82,7 +82,7 @@ impl Lightforge {
                     self.moving = None;
                     let why = self.error.take().map(|e| e.message).unwrap_or_default();
                     self.error = Some(
-                        format!("copied to {}, but the config could not be saved, so the game stays on {}: {why}", to.label, from.label)
+                        i18n::text_with_args(&self.config.interface_language, "storage-copy-config-save-failed", &[("to", &to.label), ("from", &from.label), ("error", &why)])
                             .into(),
                     );
                     if let Some(settings) = self.game_settings.as_mut().filter(|s| s.code == code) {
@@ -103,12 +103,12 @@ impl Lightforge {
                 match result {
                     Ok(freed) => {
                         if code == self.selected.code {
-                            self.status = format!("moved to {} — freed {} on {}", moving.to.label, size_of(freed), moving.from.label);
+                            self.status = i18n::text_with_args(&self.config.interface_language, "storage-moved", &[("to", &moving.to.label), ("size", &size_of(freed)), ("from", &moving.from.label)]);
                         }
                     }
                     // The game is already playable from its new library.
                     Err(e) => {
-                        self.error = Some(format!("moved to {}, but the old copy is still on {}: {e}", moving.to.label, moving.from.label).into());
+                        self.error = Some(i18n::text_with_args(&self.config.interface_language, "storage-moved-old-copy-remains", &[("to", &moving.to.label), ("from", &moving.from.label), ("error", &e)]).into());
                     }
                 }
                 if let Some(settings) = self.game_settings.as_mut().filter(|s| s.code == code) {
@@ -142,11 +142,11 @@ impl Lightforge {
                     return Ok(Task::none());
                 };
                 if let Some(what) = self.store_writer() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", what)]).into());
                     return Ok(Task::none());
                 }
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 self.moving = Some(Moving {

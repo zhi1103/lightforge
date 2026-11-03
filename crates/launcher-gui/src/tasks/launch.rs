@@ -99,14 +99,14 @@ pub enum Started {
 ///
 /// The exe is watched by name: the game is not reliably a descendant of the
 /// Proton child. If it never appears, the child's exit status is reported.
-pub async fn start_game(layout: Layout, code: ProductCode) -> Result<Started, Problem> {
+pub async fn start_game(layout: Layout, code: ProductCode, language: String) -> Result<Started, Problem> {
     tokio::task::spawn_blocking(move || -> Result<_, Problem> {
         // The native path, not the `C:` symlink, so Wine puts the game on its
         // own drive ([`Layout::wow_drive`]) and the shop's browser keeps its
         // GPU child. Verified 2026-10-02, a full checkout.
         let exe = layout.wow_exe(&code);
         if !exe.is_file() {
-            return Err(format!("no game at {}", exe.display()).into());
+            return Err(crate::i18n::text_with_args(&language, "launch-no-game-at", &[("path", &exe.display().to_string())]).into());
         }
 
         back_up_before_launch(&layout, &code);
@@ -134,7 +134,7 @@ pub async fn start_game(layout: Layout, code: ProductCode) -> Result<Started, Pr
 
         let watch = exe.file_name().map(|n| n.to_string_lossy().into_owned());
         let Some(watch) = watch else {
-            return reap(child).map(Started::Over);
+            return reap(child, &language).map(Started::Over);
         };
 
         match watch_for(&layout, &before, &watch, &mut child)? {
@@ -154,11 +154,11 @@ pub async fn start_game(layout: Layout, code: ProductCode) -> Result<Started, Pr
                     "Proton exited ({status}) after {:.1}s before {watch} was seen",
                     session.elapsed().as_secs_f64()
                 );
-                Ok(Started::Over(format!("game exited ({status})")))
+                Ok(Started::Over(crate::i18n::text_with_args(&language, "launch-game-exited-status", &[("status", &status.to_string())])))
             }
             Watched::NeverAppeared => {
                 tracing::warn!("{watch} never appeared within {GAME_APPEAR_WITHIN:?}; waiting on Proton");
-                reap(child).map(Started::Over)
+                reap(child, &language).map(Started::Over)
             }
         }
     })
@@ -239,9 +239,9 @@ pub(crate) fn settle(
 
 /// Wait the Proton child out and report what it said, the old contract, kept
 /// for the launches where nothing better is knowable.
-pub(crate) fn reap(mut child: std::process::Child) -> Result<String, Problem> {
+pub(crate) fn reap(mut child: std::process::Child, language: &str) -> Result<String, Problem> {
     let status = child.wait().map_err(|e| Problem::of(&e))?;
-    Ok(format!("game exited ({status})"))
+    Ok(crate::i18n::text_with_args(language, "launch-game-exited-status", &[("status", &status.to_string())]))
 }
 
 /// Wait on a Battle.net invocation off-thread. A dropped `Child` is never
@@ -344,6 +344,7 @@ pub async fn install_via_battle_net(
     user: String,
     uid: String,
     label: String,
+    language: String,
 ) -> Result<String, Problem> {
     tokio::task::spawn_blocking(move || -> Result<_, Problem> {
         use lightforge_core::battlenet::{self, Launch};
@@ -362,7 +363,7 @@ pub async fn install_via_battle_net(
             .map_err(|e| Problem::of(&e))?;
         reap_later(child);
 
-        Ok(format!("Battle.net is asking where to install {label}"))
+        Ok(crate::i18n::text_with_args(&language, "launch-battlenet-install-prompt", &[("game", &label)]))
     })
     .await
     .map_err(|e| Problem::of(&e))?
@@ -401,6 +402,7 @@ pub async fn await_game_exit(
     code: ProductCode,
     game: GameProcess,
     settle_after: Option<u64>,
+    language: String,
 ) -> Result<String, Problem> {
     tokio::task::spawn_blocking(move || -> Result<_, Problem> {
         if let Err(e) = lightforge_core::preflight::wait_for_exit(game.pid) {
@@ -416,7 +418,7 @@ pub async fn await_game_exit(
                 settle(&layout, &runner, generation);
             }
         }
-        Ok(format!("{} exited", game.name))
+        Ok(crate::i18n::text_with_args(&language, "launch-game-exited", &[("game", &game.name)]))
     })
     .await
     .map_err(|e| Problem::of(&e))?
@@ -427,7 +429,7 @@ const STOP_GRACE: Duration = Duration::from_secs(5);
 
 /// Stop one running game, leaving Battle.net, other games and the rest of
 /// the prefix be.
-pub async fn stop_game(layout: Layout, game: GameProcess) -> Result<String, Problem> {
+pub async fn stop_game(layout: Layout, game: GameProcess, language: String) -> Result<String, Problem> {
     use lightforge_core::preflight::{self, Disposition};
 
     let stopped = tokio::task::spawn_blocking(move || preflight::stop_game(&layout, game.pid, STOP_GRACE))
@@ -435,10 +437,10 @@ pub async fn stop_game(layout: Layout, game: GameProcess) -> Result<String, Prob
         .map_err(|e| Problem::of(&e))?;
     match stopped {
         Some(stuck) if stuck.disposition == Disposition::Survived => {
-            Err(format!("{} would not stop", stuck.game.name).into())
+            Err(crate::i18n::text_with_args(&language, "launch-game-would-not-stop", &[("game", &stuck.game.name)]).into())
         }
-        Some(_) => Ok("game stopped".to_owned()),
-        None => Ok(format!("{} had already exited", game.name)),
+        Some(_) => Ok(crate::i18n::text(&language, "launch-game-stopped")),
+        None => Ok(crate::i18n::text_with_args(&language, "launch-game-already-exited", &[("game", &game.name)])),
     }
 }
 
@@ -459,7 +461,7 @@ pub async fn running_games(layout: Layout) -> Vec<String> {
 }
 
 /// Close Battle.net and its Agent, leaving any game running.
-pub async fn quit_battle_net(layout: Layout, code: ProductCode) -> Result<String, Problem> {
+pub async fn quit_battle_net(layout: Layout, code: ProductCode, language: String) -> Result<String, Problem> {
     use lightforge_core::preflight::{self, Disposition};
 
     tokio::task::spawn_blocking(move || -> Result<_, Problem> {
@@ -471,8 +473,8 @@ pub async fn quit_battle_net(layout: Layout, code: ProductCode) -> Result<String
             .map(|o| format!("{} (pid {})", o.process.name, o.process.pid))
             .collect();
         match stuck.is_empty() {
-            true => Ok("Battle.net closed".to_owned()),
-            false => Err(format!("Battle.net would not close: {}", stuck.join(", ")).into()),
+            true => Ok(crate::i18n::text(&language, "launch-battlenet-quit-closed")),
+            false => Err(crate::i18n::text_with_args(&language, "launch-battlenet-would-not-close", &[("processes", &stuck.join(", "))]).into()),
         }
     })
     .await
@@ -517,6 +519,7 @@ pub async fn open_battle_net(
     layout: Layout,
     code: ProductCode,
     user: String,
+    language: String,
 ) -> Result<String, Problem> {
     tokio::task::spawn_blocking(move || -> Result<_, Problem> {
         use lightforge_core::battlenet::{self, Launch};
@@ -529,7 +532,7 @@ pub async fn open_battle_net(
             &battlenet::window_state_tweaks(false),
         );
         reap_later(battlenet::launch(&runner, &layout, &Launch::Client).map_err(|e| Problem::of(&e))?);
-        Ok("Battle.net opening".to_owned())
+        Ok(crate::i18n::text(&language, "launch-battlenet-opening"))
     })
     .await
     .map_err(|e| Problem::of(&e))?

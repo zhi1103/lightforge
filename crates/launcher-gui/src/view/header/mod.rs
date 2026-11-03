@@ -119,7 +119,8 @@ impl Lightforge {
 
     /// The page tabs, and the shop, which leaves the app.
     fn page_tabs(&self) -> Element<'_, Message> {
-        let nav = |label: &'static str, screen: Screen| {
+        let language = &self.config.interface_language;
+        let nav = |label: String, screen: Screen| {
             let entry = button(text(label).size(theme::tap_text(TAB_LABEL)).font(theme::BOLD))
                 .padding(theme::tap([theme::SM, theme::SM]));
             // Addons is a game's own page, opened
@@ -137,7 +138,7 @@ impl Lightforge {
         };
 
         // A tab that opens a browser, so it wears the arrow and skips `nav`.
-        let outbound = |label: &'static str, url: &'static str| {
+        let outbound = |label: String, url: &'static str| {
             button(
                 row![
                     text(label).size(theme::tap_text(TAB_LABEL)).font(theme::BOLD),
@@ -157,12 +158,12 @@ impl Lightforge {
             self.ring(
                 focus::Target::Tab(Screen::Dashboard),
                 Some(Message::Show(Screen::Dashboard)),
-                nav("Play", Screen::Dashboard),
+                nav(i18n::text(language, "header-play"), Screen::Dashboard),
             ),
             self.ring(
                 focus::Target::Shop,
                 Some(Message::OpenLink(SHOP_URL)),
-                outbound("Battle.net Shop", SHOP_URL),
+                outbound(i18n::text(language, "header-battlenet-shop"), SHOP_URL),
             ),
         ]
         .spacing(TAB_GAP)
@@ -198,12 +199,13 @@ impl Lightforge {
 
     /// The band of tiles, as a card of its own under the tabs.
     fn band_card(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         container(
             container(
                 row![
                     // Labelled as Battle.net's band is; see [`optically_centred`].
                     container(optically_centred(
-                        muted("GAMES".to_owned(), theme::LABEL).font(theme::BOLD),
+                        muted(i18n::text(language, "header-games"), theme::LABEL).font(theme::BOLD),
                     ))
                     .height(Length::Fill)
                     .align_y(Alignment::Center),

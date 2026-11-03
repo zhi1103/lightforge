@@ -6,6 +6,7 @@ use iced::widget::column;
 impl Lightforge {
     /// Lightforge's own release notes.
     pub(crate) fn updates_screen(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let version = env!("CARGO_PKG_VERSION");
         let releases = lightforge_core::releases::all();
 
@@ -14,12 +15,12 @@ impl Lightforge {
         if releases.is_empty() {
             // Only reachable in a build whose notes file was emptied; a test
             // in `core::releases` keeps the shipped one honest.
-            body = body.push(muted("No release notes in this build.".to_owned(), theme::BODY));
+            body = body.push(muted(i18n::text(language, "updates-no-notes"), theme::BODY));
         }
 
         for release in &releases {
             let heading = match release.version == version {
-                true => format!("{} — this version", release.version),
+                true => i18n::text_with_args(language, "updates-this-version", &[("version", &release.version)]),
                 false => release.version.clone(),
             };
             body = body.push(
@@ -36,17 +37,14 @@ impl Lightforge {
         // The notes stay readable here whatever the popup has been told, which
         // is what makes "never show this again" a safe thing to tick.
         body = body.extend(
-            self.hint(
-                "These are the notes the launcher shows after an update. Settings › General \
-                 decides whether that popup appears.",
-            )
+            self.hint(i18n::text(language, "updates-hint"))
             .map(Element::from),
         );
 
         // Through `page`, for the margins and title.
         self.page(
-            "Lightforge Updates",
-            Some(format!("You are running {version}.")),
+            i18n::text(language, "app-menu-updates"),
+            Some(i18n::text_with_args(language, "upgrade-current-version", &[("version", version)])),
             None,
             body.into(),
         )

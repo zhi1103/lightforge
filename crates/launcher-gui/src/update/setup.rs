@@ -68,7 +68,7 @@ impl Lightforge {
                         // `setup_running` so nothing in the UI locks for it.
                         let (tx, _) = tokio::sync::watch::channel(provision::Progress::default());
                         Task::perform(
-                            provision::install_build(proton::TESTED.to_owned(), tx),
+                            provision::install_build(proton::TESTED.to_owned(), tx, self.config.interface_language.clone()),
                             Message::TestedProtonFetched,
                         )
                     }
@@ -224,7 +224,7 @@ impl Lightforge {
                     .as_ref()
                     .and_then(|s| s.proton.as_ref())
                     .map(|p| p.version.clone());
-                self.proton_notice = Some("checking…".to_owned());
+                self.proton_notice = Some(i18n::text(&self.config.interface_language, "status-checking"));
                 Task::perform(
                     provision::check_proton(self.http.clone(), installed),
                     Message::ProtonChecked,
@@ -236,15 +236,15 @@ impl Lightforge {
                     Ok(releases) => {
                         self.proton_notice = Some(match &releases.update {
                             // Notify-only by policy: nothing updates itself.
-                            Some(version) => format!("{version} is available"),
+                            Some(version) => i18n::text_with_args(&self.config.interface_language, "proton-version-available", &[("version", version)]),
                             None => match self.setup.as_ref().and_then(|s| s.proton.as_ref()) {
-                                Some(_) => "up to date".to_owned(),
-                                None => "nothing installed yet".to_owned(),
+                                Some(_) => i18n::text(&self.config.interface_language, "proton-up-to-date"),
+                                None => i18n::text(&self.config.interface_language, "proton-nothing-installed"),
                             },
                         });
                         self.proton_available = releases.available;
                     }
-                    Err(e) => self.proton_notice = Some(format!("check failed: {e}")),
+                    Err(e) => self.proton_notice = Some(i18n::text_with_args(&self.config.interface_language, "proton-check-failed", &[("error", &e)])),
                 }
                 Task::none()
             }
@@ -273,11 +273,12 @@ impl Lightforge {
                     return Ok(Task::none());
                 };
                 self.proton_notice = Some(match tasks::open_url(&tool.install_url()) {
-                    Ok(()) => format!(
-                        "Steam is asked to install {}. It appears in the list once Steam is done.",
-                        tool.name
+                    Ok(()) => i18n::text_with_args(
+                        &self.config.interface_language,
+                        "proton-steam-install-requested",
+                        &[("name", tool.name)],
                     ),
-                    Err(e) => format!("Could not reach Steam: {e}"),
+                    Err(e) => i18n::text_with_args(&self.config.interface_language, "proton-steam-unreachable", &[("error", &e)]),
                 });
                 self.steam_proton_asked.insert(app_id);
                 Task::none()
@@ -301,7 +302,7 @@ impl Lightforge {
                 let setup_again = std::mem::take(&mut self.setup_after_proton);
                 match result {
                     Ok(()) => {
-                        self.proton_notice = Some("installed".to_owned());
+                        self.proton_notice = Some(i18n::text(&self.config.interface_language, "proton-installed"));
                         // What is installed just changed, so re-probe rather
                         // than editing the list we happen to be holding.
                         let status = Task::perform(
@@ -329,9 +330,9 @@ impl Lightforge {
                 else {
                     return Ok(Task::none());
                 };
-                self.proton_notice = Some(format!("removing {version}…"));
+                self.proton_notice = Some(i18n::text_with_args(&self.config.interface_language, "proton-removing", &[("version", &version)]));
                 Task::perform(
-                    provision::remove_proton(self.config.clone(), build),
+                    provision::remove_proton(self.config.clone(), build, self.config.interface_language.clone()),
                     Message::ProtonRemoved,
                 )
             }
@@ -374,6 +375,9 @@ impl Lightforge {
         self.setup_sample = provision::Progress::default();
         self.setup_running = true;
         self.error = None;
-        Task::perform(provision::install_build(version, tx), Message::ProtonInstalled)
+        Task::perform(
+            provision::install_build(version, tx, self.config.interface_language.clone()),
+            Message::ProtonInstalled,
+        )
     }
 }

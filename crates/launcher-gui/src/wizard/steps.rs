@@ -2,6 +2,7 @@
 
 use super::view::{mark, note};
 use super::*;
+use crate::i18n;
 // Named, not globbed: std's own `column!` would otherwise win the glob.
 use iced::widget::column;
 
@@ -15,19 +16,16 @@ pub(super) fn welcome_answered(app: &Lightforge) -> bool {
 }
 
 pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
+    let language = &app.config.interface_language;
     let mut body = column![
-        text(
-            "Lightforge installs and launches World of Warcraft on Linux itself, and hands \
-             everything else to Battle.net. This takes a couple of minutes, and nothing is \
-             downloaded until you say so."
-        )
+        text(i18n::text(language, "wizard-welcome-intro"))
         .size(theme::BODY),
     ]
     .spacing(theme::MD);
 
     // Said before 400 MB of Proton: the Battle.net installer is 32-bit.
     if app.setup.as_ref().is_some_and(|s| !s.thirty_two_bit) {
-        body = body.push(Lightforge::runtime_row());
+        body = body.push(Lightforge::runtime_row(&app.config.interface_language));
     }
 
     let regions: Vec<RegionChoice> = Region::ALL.into_iter().map(RegionChoice).collect();
@@ -35,7 +33,7 @@ pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
         LOCALES.iter().map(|(code, _)| LocaleChoice(code.to_string())).collect();
 
     body = body.push(field_row(
-        "Region".to_owned(),
+        i18n::text(language, "wizard-region"),
         app.picker(
             "wizard region".to_owned(),
             regions,
@@ -47,7 +45,7 @@ pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
         ),
     ));
     body = body.push(field_row(
-        "Language".to_owned(),
+        i18n::text(language, "settings-downloads-game-language-title"),
         app.picker(
             "wizard language".to_owned(),
             locales,
@@ -64,7 +62,7 @@ pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
     // television, and a desktop, and nothing on the machine says which.
     if app.steamos {
         let picked = app.config.steamos_use;
-        let answer = |label: &'static str, value: SteamOsUse| {
+        let answer = |label: String, value: SteamOsUse| {
             clickable(
                 format!("steamos {value:?}"),
                 iced::widget::radio(label, value, picked, |answer| {
@@ -75,21 +73,16 @@ pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
         };
         body = body.push(
             column![
-                text("How will you use Lightforge on this SteamOS device?").size(theme::BODY),
-                answer("Steam Deck or Steam Machine: Controller Input", SteamOsUse::Console),
-                answer("SteamOS on a desktop PC: Mouse and Keyboard Input", SteamOsUse::Desktop),
+                text(i18n::text(language, "wizard-steamos-use-question")).size(theme::BODY),
+                answer(i18n::text(language, "wizard-steamos-console"), SteamOsUse::Console),
+                answer(i18n::text(language, "wizard-steamos-desktop"), SteamOsUse::Desktop),
             ]
             .spacing(theme::SM),
         );
     }
 
     body = body.extend(
-        app.hint(
-            "The region decides which of Blizzard's version services a download comes from, \
-             and the language decides which of a build's files are fetched. Both are written \
-             into the install, so changing the language later means downloading that \
-             language's files.",
-        )
+        app.hint(i18n::text(language, "wizard-region-language-hint"))
         .map(Element::from),
     );
 
@@ -97,15 +90,13 @@ pub(super) fn welcome(app: &Lightforge) -> Element<'_, Message> {
 }
 
 pub(super) fn place<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
-    let mut body = column![text(
-        "The Wine prefix and Battle.net live in one place, on your home drive. Games can go \
-         on any drive you add."
-    )
+    let language = &app.config.interface_language;
+    let mut body = column![text(i18n::text(language, "wizard-place-intro"))
     .size(theme::BODY)]
     .spacing(theme::MD);
 
     body = body.push(field_row(
-        "Install to".to_owned(),
+        i18n::text(language, "wizard-install-to"),
         row![
             clickable(
                 "wizard location",
@@ -116,34 +107,34 @@ pub(super) fn place<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
                     .size(theme::BODY)
                     .padding(theme::SM),
             ),
-            secondary("Use this", Message::UseLocation).enabled(app.library_empty),
+            secondary(&i18n::text(language, "wizard-use-this"), Message::UseLocation).enabled(app.library_empty),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center)
         .into(),
     ));
 
-    let mut drives = column![muted("Drives for games".to_owned(), theme::LABEL)].spacing(theme::SM);
+    let mut drives = column![muted(i18n::text(language, "wizard-drives-for-games"), theme::LABEL)].spacing(theme::SM);
     for library in &app.config.libraries {
         let free = match library.disk() {
-            Some(disk) => format!("{} free", size_of(disk.free)),
-            None => "not mounted".to_owned(),
+            Some(disk) => i18n::text_with_args(language, "wizard-drive-free", &[("size", &size_of(disk.free))]),
+            None => i18n::text(language, "wizard-not-mounted"),
         };
         let mut facts = column![text(library.label.clone()).size(theme::BODY)].spacing(theme::XS);
         facts = facts.push(mono(format!("{} · {free}", library.games().display())));
         let mut actions = row![].spacing(theme::SM).align_y(Alignment::Center);
         match library.is_default {
-            true => actions = actions.push(muted("default".to_owned(), theme::LABEL)),
+            true => actions = actions.push(muted(i18n::text(language, "settings-storage-default"), theme::LABEL)),
             false => {
                 actions = actions.push(
-                    secondary("Make default", Message::SetDefaultDrive(library.id.clone()))
+                    secondary(&i18n::text(language, "settings-storage-make-default"), Message::SetDefaultDrive(library.id.clone()))
                         .enabled(true),
                 )
             }
         }
         // As on the Storage page: not the default, never the last.
         actions = actions.push(
-            secondary("Remove", Message::Wizard(Msg::RemoveDrive(library.id.clone())))
+            secondary(&i18n::text(language, i18n::COMMON_REMOVE), Message::Wizard(Msg::RemoveDrive(library.id.clone())))
                 .enabled(!library.is_default && app.config.libraries.len() > 1),
         );
         drives = drives.push(
@@ -161,7 +152,7 @@ pub(super) fn place<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         }
         let free = partition
             .disk
-            .map(|disk| format!("{} free", size_of(disk.free)))
+            .map(|disk| i18n::text_with_args(language, "wizard-drive-free", &[("size", &size_of(disk.free))]))
             .unwrap_or_else(|| partition.fstype.clone());
         drives = drives.push(
             container(
@@ -172,7 +163,7 @@ pub(super) fn place<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
                     ]
                     .spacing(theme::XS)
                     .width(Length::Fill),
-                    secondary("Add", Message::Wizard(Msg::AddDrive(index))).enabled(true),
+                    secondary(&i18n::text(language, "common-add"), Message::Wizard(Msg::AddDrive(index))).enabled(true),
                 ]
                 .spacing(theme::MD)
                 .align_y(Alignment::Center),
@@ -192,24 +183,20 @@ pub(super) fn place<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         body = body.push(muted(error.clone(), theme::CAPTION));
     }
     body = body.extend(
-        app.hint(
-            "Adding a drive creates a Lightforge folder on it. Nothing is moved, and removing              a drive again deletes nothing.",
-        )
+        app.hint(i18n::text(language, "wizard-add-drive-hint"))
         .map(Element::from),
     );
     body.into()
 }
 
 pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
+    let language = &app.config.interface_language;
     let mut body = column![].spacing(theme::MD);
 
     if wizard.scanning {
-        body = body.push(text("Looking through the Wine prefixes on this machine…").size(theme::BODY));
+        body = body.push(text(i18n::text(language, "wizard-scanning-prefixes")).size(theme::BODY));
         body = body.extend(
-            app.hint(
-                "Only where a Battle.net prefix is normally kept — Lutris, Bottles, Heroic, \
-                 Faugus, Steam and ~/.wine. Nothing leaves this machine.",
-            )
+            app.hint(i18n::text(language, "wizard-scan-scope"))
             .map(Element::from),
         );
         return body.into();
@@ -223,9 +210,9 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
 
     body = body.push(
         text(match wizard.rows.len() {
-            0 => "No Battle.net games found".to_owned(),
-            1 => "1 Battle.net game found".to_owned(),
-            n => format!("{n} Battle.net games found"),
+            0 => i18n::text(language, "wizard-no-games-found"),
+            1 => i18n::text(language, "wizard-one-game-found"),
+            n => i18n::text_with_args(language, "wizard-many-games-found", &[("count", &n.to_string())]),
         })
         .size(theme::BODY),
     );
@@ -250,8 +237,8 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         let mut facts = column![
             text(name).size(theme::BODY),
             mono(detail),
-            muted(
-                format!("{} · found in {}", size_of(row.bytes()), row.origin.label()),
+                muted(
+                i18n::text_with_args(language, "wizard-game-found-details", &[("size", &size_of(row.bytes())), ("origin", row.origin.label())]),
                 theme::CAPTION,
             ),
         ]
@@ -262,10 +249,10 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         if let RowKind::Wow(install) = &row.kind {
             if install.needs_rename() {
                 facts = facts.extend(
-                    app.hint(format!(
-                        "its folder will be renamed to \"{}\", which is where a library keeps \
-                         an install",
-                        lightforge_core::paths::WOW_DIR
+                    app.hint(i18n::text_with_args(
+                        language,
+                        "wizard-folder-will-be-renamed",
+                        &[("folder", lightforge_core::paths::WOW_DIR)],
                     ))
                     .map(Element::from),
                 );
@@ -273,10 +260,7 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         }
         if matches!(row.kind, RowKind::Game(_)) {
             facts = facts.extend(
-                app.hint(
-                    "Battle.net's to update, not Lightforge's — ours is pointed at it where it \
-                     is.",
-                )
+                app.hint(i18n::text(language, "wizard-handoff-game-hint"))
                 .map(Element::from),
             );
         }
@@ -313,19 +297,19 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
         false => crate::widgets::secondary_tall(label, message, box_height),
     };
     body = body.push(field_row(
-        "Somewhere else".to_owned(),
+        i18n::text(language, "wizard-somewhere-else"),
         row![
             clickable(
                 "wizard pointed",
-                text_input("~/Games/battlenet, or a World of Warcraft folder", &wizard.pointed)
+                text_input(&i18n::text(language, "wizard-point-placeholder"), &wizard.pointed)
                     .on_input(|path| Message::Wizard(Msg::PointInput(path)))
                     .on_submit(Message::Wizard(Msg::Point))
                     .style(theme::field)
                     .size(theme::BODY)
                     .padding(theme::SM),
             ),
-            beside("Browse…", Message::Wizard(Msg::Browse)).enabled(true),
-            beside(if wizard.pointing { "Looking…" } else { "Look here" }, Message::Wizard(Msg::Point))
+            beside(&i18n::text(language, "wizard-browse"), Message::Wizard(Msg::Browse)).enabled(true),
+            beside(&if wizard.pointing { i18n::text(language, "wizard-looking") } else { i18n::text(language, "wizard-look-here") }, Message::Wizard(Msg::Point))
                 .enabled(!wizard.pointed.is_empty() && !wizard.pointing),
         ]
         .spacing(theme::SM)
@@ -339,27 +323,26 @@ pub(super) fn found<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, 
 }
 
 pub(super) fn install<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
+    let language = &app.config.interface_language;
     let mut body = column![].spacing(theme::MD);
 
     body = body.extend(wizard.adopted.iter().map(note));
 
     body = body.push(
-        text("Install Proton-GE, the Wine prefix and Battle.net (opt-out possible).")
+        text(i18n::text(language, "wizard-install-intro"))
             .size(theme::BODY),
     );
 
     body = body.push(clickable(
         "wizard battle.net",
         crate::tick(wizard.battle_net)
-            .label("Install Battle.net")
+            .label(i18n::text(language, "wizard-install-battlenet"))
             .on_toggle(|on| Message::Wizard(Msg::WantBattleNet(on)))
             .text_size(theme::tap_text(theme::BODY)),
     ));
     if !wizard.battle_net {
         body = body.push(muted(
-            "Important! Only World of Warcraft games will work for now. You can install \
-             Battle.net at any time later in the Settings menu."
-                .to_owned(),
+            i18n::text(language, "wizard-battlenet-opt-out-note"),
             theme::CAPTION,
         ));
     }
@@ -371,9 +354,8 @@ pub(super) fn install<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a
 }
 
 pub(super) fn games<'a>(app: &'a Lightforge) -> Element<'a, Message> {
-    let mut body = column![text(
-        "Select the Blizzard games you play. You can add more later on."
-    )
+    let language = &app.config.interface_language;
+    let mut body = column![text(i18n::text(language, "wizard-select-games"))
     .size(theme::BODY)]
     .spacing(theme::MD);
 
@@ -391,13 +373,13 @@ pub(super) fn games<'a>(app: &'a Lightforge) -> Element<'a, Message> {
         };
         let mut facts = column![text(entry.label.clone()).size(theme::BODY)];
         if app.installed_versions.contains_key(entry.code.as_str()) {
-            facts = facts.push(muted("installed".to_owned(), theme::CAPTION));
+            facts = facts.push(muted(i18n::text(language, "common-installed"), theme::CAPTION));
         }
         let key = format!("game {}", entry.code.as_str());
         let action: Element<Message> = match tracked(&entry.code) {
-            true => secondary("Remove", Message::RemoveProduct(entry.code.clone()))
+            true => secondary(&i18n::text(language, i18n::COMMON_REMOVE), Message::RemoveProduct(entry.code.clone()))
                 .keyed(key, app.choices.len() > 1),
-            false => secondary("Add", Message::AddProduct(entry.code.clone())).keyed(key, true),
+            false => secondary(&i18n::text(language, "common-add"), Message::AddProduct(entry.code.clone())).keyed(key, true),
         };
         container(
             row![mark, facts.width(Length::Fill), action]
@@ -416,14 +398,14 @@ pub(super) fn games<'a>(app: &'a Lightforge) -> Element<'a, Message> {
 
     match app.config.battle_net_declined {
         true => {
-            list = list.push(muted("Other Blizzard games".to_owned(), theme::LABEL));
+            list = list.push(muted(i18n::text(language, "wizard-other-blizzard-games"), theme::LABEL));
             list = list.push(muted(
-                "Battle.net is not installed, so there is nothing to hand these to.".to_owned(),
+                i18n::text(language, "wizard-battlenet-not-installed-note"),
                 theme::CAPTION,
             ));
         }
         false => {
-            list = list.push(muted("Other Blizzard games".to_owned(), theme::LABEL));
+            list = list.push(muted(i18n::text(language, "wizard-other-blizzard-games"), theme::LABEL));
             for entry in app.catalog.hand_offs().filter(|e| e.kind == Kind::HandOff) {
                 list = list.push(row_for(entry));
             }
@@ -440,44 +422,36 @@ pub(super) fn games<'a>(app: &'a Lightforge) -> Element<'a, Message> {
 }
 
 pub(super) fn done<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
+    let language = &app.config.interface_language;
     let ready = app.setup.as_ref().is_some_and(|status| status.is_ready());
     let mut body = column![text(match ready {
-        true => "That is everything. Pick a game and press Install.",
-        false => "You can start from here. Settings › Setup finishes whatever is still \
-                  outstanding, and nothing is lost by doing it later.",
+        true => i18n::text(language, "wizard-done-ready"),
+        false => i18n::text(language, "wizard-done-incomplete"),
     })
     .size(theme::BODY)]
     .spacing(theme::MD);
 
     if app.console() {
         body = body.push(muted(
-            "Lightforge goes into your Steam library as we close this, with its own \
-             artwork. It shows there the next time Steam starts."
-                .to_owned(),
+            i18n::text(language, "wizard-steam-library-note"),
             theme::CAPTION,
         ));
     }
 
     if !wizard.pending.is_empty() {
         body = body.push(muted(
-            format!(
-                "{} will be pointed out to Battle.net as we close this.",
-                wizard
+            i18n::text_with_args(language, "wizard-pending-battlenet", &[("games", &wizard
                     .pending
                     .iter()
                     .map(|(game, _)| game.label.clone())
                     .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+                    .join(", "))]),
             theme::CAPTION,
         ));
     }
 
     body = body.push(
-        text(
-            "Found a bug, have any questions or want to send feedback? Contact me on \
-             Discord or X, or use the options in the Lightforge logo dropdown.",
-        )
+        text(i18n::text(language, "wizard-contact-note"))
         .size(theme::BODY),
     );
 
@@ -504,10 +478,7 @@ pub(super) fn done<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, M
     body = body.push(
         container(
             column![
-                text(
-                    "Lightforge is free and always will be. If it saved you an evening, \
-                     you can buy me a coffee.",
-                )
+                text(i18n::text(language, "wizard-support-note"))
                 .size(theme::LABEL)
                 .color(theme::MUTED)
                 .center(),

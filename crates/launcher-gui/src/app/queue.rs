@@ -64,16 +64,16 @@ impl Lightforge {
         let (done, what) = match p.bytes_total {
             0 => (
                 p.checked as f32 / p.total as f32,
-                format!("{} of {} files checked", p.checked, p.total),
+                crate::i18n::text_with_args(&self.config.interface_language, "scan-files-checked", &[("checked", &p.checked.to_string()), ("total", &p.total.to_string())]),
             ),
             total => (
                 p.bytes as f32 / total as f32,
-                format!("{} checked", bytes_of(p.bytes, total)),
+                crate::i18n::text_with_args(&self.config.interface_language, "scan-bytes-checked", &[("size", &bytes_of(p.bytes, total))]),
             ),
         };
         let caption = match p.damaged {
             0 => what,
-            n => format!("{what} — {n} damaged so far"),
+            n => crate::i18n::text_with_args(&self.config.interface_language, "scan-damaged-so-far", &[("what", &what), ("count", &n.to_string())]),
         };
         left.push(progress_bar(0.0..=1.0, done).girth(6)).push(muted(caption, theme::CAPTION))
     }
@@ -166,14 +166,14 @@ impl Lightforge {
         // The panel above should never offer this, but the download path is
         // the one that writes to disk, so it checks for itself.
         if self.kind_of(&code) == Kind::HandOff {
-            self.error = Some(format!("{label} is installed through Battle.net").into());
+            self.error = Some(crate::i18n::text_with_args(&self.config.interface_language, "queue-installed-through-battlenet", &[("game", &label)]).into());
             return Task::none();
         }
         // The panel holds this product when its drive is away, but the queue
         // is also restored from disk and resumed without anyone pressing
         // anything, so the check that actually protects the files is here.
         if let Some(drive) = self.offline_drive(&code) {
-            self.error = Some(format!("{drive} is not mounted").into());
+            self.error = Some(crate::i18n::text_with_args(&self.config.interface_language, "storage-drive-not-mounted", &[("drive", &drive)]).into());
             return Task::none();
         }
         self.error = None;
@@ -214,7 +214,7 @@ impl Lightforge {
             d.code == self.selected.code && matches!(d.stage, Stage::Queued)
         });
         if waiting && showing {
-            self.status = "queued…".to_owned();
+            self.status = crate::i18n::text(&self.config.interface_language, "download-queued");
         }
         started
     }
@@ -263,7 +263,7 @@ impl Lightforge {
         self.queue[next].stage = Stage::Running { rx, cancel: cancel.clone() };
         // Whatever the line said before, "paused", most often, is over.
         if code == self.selected.code {
-            self.status = "downloading…".to_owned();
+            self.status = crate::i18n::text(&self.config.interface_language, "download-downloading");
         }
         self.queue[next].rate = Rate::default();
         self.queue[next].sample =
@@ -308,7 +308,7 @@ impl Lightforge {
                 // not when the run finishes winding down.
                 entry.stage = Stage::Paused(job_progress(entry.job, &entry.sample, 0));
                 self.winding_down = Some(code.clone());
-                self.status = "pausing…".to_owned();
+                self.status = crate::i18n::text(&self.config.interface_language, "download-pausing");
             }
             // Never started, so there is nothing to wind down.
             Stage::Queued => entry.stage = Stage::Paused(state::Progress::default()),

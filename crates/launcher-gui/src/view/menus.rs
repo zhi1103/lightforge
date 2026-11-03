@@ -8,7 +8,7 @@ impl Lightforge {
     pub(crate) fn app_menu(&self) -> Element<'_, Message> {
         // No destination yet means no press and a dimmed face: the entry says
         // what is coming without pretending it is here.
-        let entry = |icon: image::Handle, label: &'static str, message: Option<Message>| {
+        let entry = |icon: image::Handle, id: &'static str, message: Option<Message>| {
             let live = message.is_some();
             let face = row![
                 image(icon)
@@ -19,14 +19,14 @@ impl Lightforge {
                         false => DIMMED,
                     }),
                 match live {
-                    true => text(label).size(theme::BODY),
-                    false => muted(label.to_owned(), theme::BODY),
+                    true => text(i18n::text(&self.config.interface_language, id)).size(theme::BODY),
+                    false => muted(i18n::text(&self.config.interface_language, id), theme::BODY),
                 },
             ]
             .spacing(theme::SM)
             .align_y(Alignment::Center);
             self.ring(
-                focus::Target::Menu(label),
+                focus::Target::Menu(id),
                 message.clone(),
                 button(face.width(Length::Fill))
                     .padding(theme::tap([theme::XS, theme::SM]))
@@ -43,21 +43,21 @@ impl Lightforge {
         };
 
         let rows = column![
-            entry(gear_icon(), "Settings", Some(Message::Show(Screen::Settings))),
-            entry(updates_icon(), "Lightforge Updates", Some(Message::Show(Screen::Updates))),
+            entry(gear_icon(), i18n::MENU_SETTINGS, Some(Message::Show(Screen::Settings))),
+            entry(updates_icon(), i18n::MENU_UPDATES, Some(Message::Show(Screen::Updates))),
             container(Space::new().height(Length::Fixed(1.0)))
                 .width(Length::Fill)
                 .style(theme::divider),
-            entry(bug_icon(), "Report a Bug", Some(Message::OpenReport(ReportKind::Bug))),
+            entry(bug_icon(), i18n::MENU_REPORT_BUG, Some(Message::OpenReport(ReportKind::Bug))),
             entry(
                 feedback_icon(),
-                "Send Feedback",
+                i18n::MENU_FEEDBACK,
                 Some(Message::OpenReport(ReportKind::Feedback)),
             ),
             container(Space::new().height(Length::Fixed(1.0)))
                 .width(Length::Fill)
                 .style(theme::divider),
-            entry(exit_icon(), "Exit", Some(Message::Exit)),
+            entry(exit_icon(), i18n::MENU_EXIT, Some(Message::Exit)),
             // One row of recognisable marks.
             row![
                 square(discord_icon(), DISCORD_URL),
@@ -84,11 +84,12 @@ impl Lightforge {
         version: &str,
         name: &str,
     ) -> Element<'static, Message> {
+        let language = self.config.interface_language.clone();
         let (provider, id) = (managed.provider.clone(), managed.id.clone());
         let default_auto = self.config.addon_auto_update;
-        let entry = |label: String, message: Message| {
+        let entry = |id: &'static str, label: String, message: Message| {
             focus::ring(
-                focus::Target::Key(format!("addon menu entry {label}")),
+                focus::Target::Key(format!("addon menu entry {id}")),
                 focus::Press::Send(message.clone()),
                 button(text(label).size(theme::BODY).width(Length::Fill))
                     .padding(theme::tap([theme::XS, theme::SM]))
@@ -102,16 +103,18 @@ impl Lightforge {
         let auto = managed.auto_update.unwrap_or(default_auto);
         let mut rows = column![
             entry(
+                "ignore",
                 match managed.ignored {
-                    true => "Stop ignoring".to_owned(),
-                    false => "Ignore this addon".to_owned(),
+                    true => i18n::text(&language, "menu-addon-stop-ignoring"),
+                    false => i18n::text(&language, "menu-addon-ignore"),
                 },
                 Message::AddonIgnore(provider.clone(), id.clone(), !managed.ignored),
             ),
             entry(
+                "auto-update",
                 match auto {
-                    true => "Do not update automatically".to_owned(),
-                    false => "Update automatically".to_owned(),
+                    true => i18n::text(&language, "menu-addon-no-auto-update"),
+                    false => i18n::text(&language, "menu-addon-auto-update"),
                 },
                 Message::AddonAutoUpdate(provider.clone(), id.clone(), Some(!auto)),
             ),
@@ -123,9 +126,10 @@ impl Lightforge {
         // worth naming the default so clearing it is not a leap of faith.
         if managed.auto_update.is_some() {
             rows = rows.push(entry(
+                "follow-default",
                 match default_auto {
-                    true => "Follow the default (on)".to_owned(),
-                    false => "Follow the default (off)".to_owned(),
+                    true => i18n::text(&language, "menu-addon-follow-default-on"),
+                    false => i18n::text(&language, "menu-addon-follow-default-off"),
                 },
                 Message::AddonAutoUpdate(provider.clone(), id.clone(), None),
             ));
@@ -134,11 +138,13 @@ impl Lightforge {
         // Choosing an older build; only CurseForge publishes a build list.
         if managed.provider.eq_ignore_ascii_case("curse") {
             rows = rows.push(entry(
-                "Details and changelog…".to_owned(),
+                "details",
+                i18n::text(&language, "menu-addon-details-changelog"),
                 Message::ShowAddonDetail(provider.clone(), id.clone(), name.to_owned()),
             ));
             rows = rows.push(entry(
-                "Choose a version…".to_owned(),
+                "choose-version",
+                i18n::text(&language, "menu-addon-choose-version"),
                 Message::PickVersion(
                     provider.clone(),
                     id.clone(),
@@ -152,13 +158,15 @@ impl Lightforge {
         match (&managed.pinned, &managed.file_id) {
             (Some(_), _) => {
                 rows = rows.push(entry(
-                    format!("Unpin (held at {version})"),
+                    "unpin",
+                    i18n::text_with_args(&language, "menu-addon-unpin-version", &[("version", version)]),
                     Message::AddonPin(provider, id, None),
                 ));
             }
             (None, Some(file_id)) => {
                 rows = rows.push(entry(
-                    format!("Pin to {version}"),
+                    "pin",
+                    i18n::text_with_args(&language, "menu-addon-pin-version", &[("version", version)]),
                     Message::AddonPin(provider, id, Some(file_id.clone())),
                 ));
             }
@@ -176,11 +184,11 @@ impl Lightforge {
             );
         }
         if let Some(url) = managed.website_url.clone() {
-            rows = rows.push(entry("Open project page".to_owned(), Message::OpenUrl(url)));
+            rows = rows.push(entry("project-page", i18n::text(&language, "menu-addon-open-project"), Message::OpenUrl(url)));
         }
         // See `support_url`; the label promises help, not a payment form.
         if let Some(url) = support {
-            rows = rows.push(entry("Support the author…".to_owned(), Message::OpenUrl(url)));
+            rows = rows.push(entry("support-author", i18n::text(&language, "menu-addon-support-author"), Message::OpenUrl(url)));
         }
 
         // An action, under its own rule; disabled while busy.
@@ -192,9 +200,9 @@ impl Lightforge {
         let reinstall = (!self.addons_locked())
             .then(|| Message::ReinstallAddon(managed.provider.clone(), managed.id.clone()));
         rows = rows.push(self.ring(
-            focus::Target::Key("addon menu entry Re-install".to_owned()),
+            focus::Target::Key("addon menu entry reinstall".to_owned()),
             reinstall.clone(),
-            button(text("Re-install".to_owned()).size(theme::BODY).width(Length::Fill))
+            button(text(i18n::text(&language, "menu-addon-reinstall")).size(theme::BODY).width(Length::Fill))
                 .padding(theme::tap([theme::XS, theme::SM]))
                 .style(theme::ghost)
                 .on_press_maybe(reinstall),
@@ -204,15 +212,9 @@ impl Lightforge {
         // alone do not say that the addon stays installed and working.
         rows = rows.push(muted(
             match (managed.ignored, managed.pinned.is_some()) {
-                (true, _) => "Ignored: left out of every pass, automatic or not. \
-                              Updating it from its own row still works."
-                    .to_owned(),
-                (false, true) => "Pinned: held at this version until you unpin it, \
-                                  and its row offers no update."
-                    .to_owned(),
-                (false, false) => "Ignoring leaves it out of Check for updates and \
-                                   Update all; pinning holds it at one version."
-                    .to_owned(),
+                (true, _) => i18n::text(&language, "menu-addon-ignored-hint"),
+                (false, true) => i18n::text(&language, "menu-addon-pinned-hint"),
+                (false, false) => i18n::text(&language, "menu-addon-update-hint"),
             },
             theme::CAPTION,
         ));
@@ -316,10 +318,11 @@ impl Lightforge {
 
     /// The menu beside a running Battle.net: bring it up, or quit it.
     pub(crate) fn client_menu(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let free = !self.busy && !self.quitting_client;
-        let item = |label: &'static str, message: Message| {
+        let item = |id: &'static str, label: String, message: Message| {
             self.ring(
-                focus::Target::Menu(label),
+                focus::Target::Menu(id),
                 free.then(|| message.clone()),
                 button(text(label).size(theme::LABEL))
                     .style(theme::ghost)
@@ -330,8 +333,8 @@ impl Lightforge {
         };
         let menu = container(
             column![
-                item("Show Battle.net", Message::ShowBattleNet),
-                item("Quit Battle.net", Message::AskQuitBattleNet),
+                item("client-show", i18n::text(language, "menu-show-battlenet"), Message::ShowBattleNet),
+                item("client-quit", i18n::text(language, "menu-quit-battlenet"), Message::AskQuitBattleNet),
             ]
             .spacing(theme::XS),
         )
@@ -344,9 +347,10 @@ impl Lightforge {
 
     /// The cog menu: what you do *about* a game, not to play it.
     pub(crate) fn gear_menu(&self) -> Element<'_, Message> {
-        let item = |label: &'static str, message: Message, enabled: bool| {
+        let language = &self.config.interface_language;
+        let item = |id: &'static str, label: String, message: Message, enabled: bool| {
             self.ring(
-                focus::Target::Menu(label),
+                focus::Target::Menu(id),
                 enabled.then(|| message.clone()),
                 button(text(label).size(theme::LABEL))
                     .style(theme::ghost)
@@ -364,27 +368,28 @@ impl Lightforge {
         // two that change the install below a rule.
         let menu = container(
             column![
-                item("Game Settings", Message::OpenGameSettings, installed),
-                item("Show in Explorer", Message::ShowInExplorer, installed),
-                item("Game Version", Message::AskGameVersion, installed),
-                item("Scan and Repair", Message::ScanAndRepair, can.scan),
-                item("Check for Updates", Message::CheckForUpdates, !self.locked()),
+                item("game-settings", i18n::text(language, "menu-game-settings"), Message::OpenGameSettings, installed),
+                item("show-in-explorer", i18n::text(language, "menu-show-in-explorer"), Message::ShowInExplorer, installed),
+                item("game-version", i18n::text(language, "menu-game-version"), Message::AskGameVersion, installed),
+                item("scan-repair", i18n::text(language, "menu-scan-repair"), Message::ScanAndRepair, can.scan),
+                item("check-updates", i18n::text(language, "menu-check-updates"), Message::CheckForUpdates, !self.locked()),
             ]
             .extend(
                 self.owed_repair
                     .is_some()
-                    .then(|| item("Repair Damaged Files", Message::RepairDamaged, can.repair)))
+                    .then(|| item("repair-files", i18n::text(language, "menu-repair-damaged-files"), Message::RepairDamaged, can.repair)))
             .extend(queued.then(|| {
                 item(
-                    "Cancel Download",
+                    "cancel-download",
+                    i18n::text(language, "menu-cancel-download"),
                     Message::AskCancelDownload(self.selected.code.clone()),
                     true,
                 )
             }))
             .push(container(Space::new()).height(Length::Fixed(1.0)).width(Length::Fill).style(theme::divider))
-            .push(item("Modify Install", Message::AskModifyInstall, can.scan))
-            .push(item("Uninstall", Message::AskUninstall, can.uninstall))
-            .push(item("Copy Debug Info", Message::CopyDebug, true))
+            .push(item("modify-install", i18n::text(language, "menu-modify-install"), Message::AskModifyInstall, can.scan))
+            .push(item("uninstall", i18n::text(language, "common-uninstall"), Message::AskUninstall, can.uninstall))
+            .push(item("copy-debug", i18n::text(language, "menu-copy-debug-info"), Message::CopyDebug, true))
             .spacing(theme::XS),
         )
         .padding(theme::XS)

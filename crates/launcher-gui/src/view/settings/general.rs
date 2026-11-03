@@ -3,27 +3,40 @@
 use crate::*;
 use iced::widget::column;
 
+#[derive(Clone, PartialEq)]
+struct LanguageChoice {
+    code: &'static str,
+    label: String,
+}
+
+impl std::fmt::Display for LanguageChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
 impl Lightforge {
     /// The Addons section: what every addon follows unless it says otherwise.
     pub(crate) fn addons_section(&self) -> Element<'_, Message> {
-        let choices: Vec<ChannelChoice> = Channel::ALL.map(ChannelChoice).to_vec();
+        let language = &self.config.interface_language;
+        let choices: Vec<DisplayChoice<ChannelChoice>> = Channel::ALL
+            .map(ChannelChoice)
+            .map(|choice| DisplayChoice(choice, choice.label(language)))
+            .to_vec();
 
         setting_group([
             setting(
-                "Update channel",
-                "The newest kind of build an addon may update to. An addon can choose its own.",
+                i18n::text(language, "settings-addons-channel-title"),
+                i18n::text(language, "settings-addons-channel-about"),
                 self.hint(
-                    "A channel is a floor, not a filter: allowing alpha builds still installs \
-                     the newest release when that is newer. Only CurseForge and GitHub publish \
-                     pre-release builds; other sources have one build, so the setting is \
-                     inert there.",
+                    i18n::text(language, "settings-addons-channel-hint"),
                 ),
                 self.picker(
                     "addon channel".to_owned(),
                     choices,
-                    Some(ChannelChoice(self.config.addon_channel)),
+                    Some(DisplayChoice(ChannelChoice(self.config.addon_channel), ChannelChoice(self.config.addon_channel).label(language))),
                     "",
-                    Message::AddonChannelDefault,
+                    |choice| Message::AddonChannelDefault(choice.0),
                     // The Proton pickers' size, so every dropdown on the page
                     // is one width and one text size.
                     Length::Fixed(260.0),
@@ -31,13 +44,10 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "Keep addons up to date",
-                "Once per game per session, before you play.",
+                i18n::text(language, "settings-addons-auto-title"),
+                i18n::text(language, "settings-addons-auto-about"),
                 self.hint(
-                    "When Lightforge starts, and again the first time you switch to another \
-                     game. A launch waits for it rather than writing into the AddOns folder the \
-                     client is reading. An addon can opt out on its own, and an ignored addon \
-                     never moves either way.",
+                    i18n::text(language, "settings-addons-auto-hint"),
                 ),
                 switch("addon auto update", self.config.addon_auto_update, Message::AddonAutoUpdateDefault),
             ),
@@ -53,19 +63,22 @@ impl Lightforge {
         let chosen = self.config.interface_size;
         #[allow(clippy::cast_possible_truncation, reason = "0.5 to 2, see fit::desktop_scale")]
         let shown = (self.ui_scale * 100.0).round() as u16;
+        let language = &self.config.interface_language;
         let about = match shown < chosen {
-            true => format!("Limited to {shown}% on this screen."),
-            false => "Text, controls and the window, on top of your desktop's scaling.".to_owned(),
+            true => i18n::text_with_args(
+                language,
+                i18n::GENERAL_INTERFACE_SIZE_LIMITED,
+                &[("percent", &shown.to_string())],
+            ),
+            false => i18n::text(language, i18n::GENERAL_INTERFACE_SIZE_ABOUT),
         };
         let choices: Vec<InterfaceSizeChoice> =
             fit::INTERFACE_SIZES.into_iter().map(InterfaceSizeChoice).collect();
         Some(setting(
-            "Interface size",
+            i18n::text(language, i18n::GENERAL_INTERFACE_SIZE_TITLE),
             about,
             self.hint(
-                "The window grows with it, up to nine tenths of the screen, and shrinks \
-                 below 100% when it would not fit at all. On Wayland it grows from its \
-                 top-left corner: a window there cannot move itself.",
+                i18n::text(language, i18n::GENERAL_INTERFACE_SIZE_HINT),
             ),
             self.picker(
                 "interface size".to_owned(),
@@ -82,6 +95,17 @@ impl Lightforge {
     /// What the launcher does around a launch: the settings that are about
     /// the app itself, not about a product, a transfer or a prefix.
     pub(crate) fn general_section(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
+        let language_choices = vec![
+            LanguageChoice {
+                code: i18n::ENGLISH,
+                label: i18n::text(language, i18n::GENERAL_LANGUAGE_ENGLISH),
+            },
+            LanguageChoice {
+                code: i18n::CHINESE,
+                label: i18n::text(language, i18n::GENERAL_LANGUAGE_CHINESE),
+            },
+        ];
         let shortcut: Option<Element<'_, Message>> = self.steam_shortcut.as_ref().map(|outcome| match outcome {
             Ok(done) => muted(done.clone(), theme::LABEL).into(),
             Err(e) => text(e.clone()).size(theme::LABEL).color(theme::ERROR).into(),
@@ -90,64 +114,78 @@ impl Lightforge {
         column![
             setting_group([
                 setting(
-                    "Minimize when a game starts",
-                    "The window waits in the taskbar until you bring it back.",
+                    i18n::text(language, i18n::GENERAL_LANGUAGE_TITLE),
+                    i18n::text(language, i18n::GENERAL_LANGUAGE_ABOUT),
+                    None,
+                    self.picker(
+                        "interface language".to_owned(),
+                        language_choices.clone(),
+                        Some(
+                            language_choices
+                                .iter()
+                                .find(|choice| choice.code == self.config.interface_language)
+                                .cloned()
+                                .unwrap_or_else(|| language_choices[0].clone()),
+                        ),
+                        "",
+                        |choice| Message::InterfaceLanguage(choice.code.to_owned()),
+                        Length::Fixed(260.0),
+                        theme::BODY,
+                    ),
+                ),
+                setting(
+                    i18n::text(language, i18n::GENERAL_MINIMIZE_TITLE),
+                    i18n::text(language, i18n::GENERAL_MINIMIZE_ABOUT),
                     self.hint(
-                        "It stays minimized after the game exits: a launcher that raises \
-                         itself over whatever you did next is worse than one that waits.",
+                        i18n::text(language, i18n::GENERAL_MINIMIZE_HINT),
                     ),
                     switch("minimize on launch", self.config.minimize_on_launch, Message::MinimizeOnLaunch),
                 ),
                 setting(
-                    "Start Battle.net minimized",
-                    "When it launches a game for you and can sign in by itself.",
+                    i18n::text(language, i18n::GENERAL_BATTLENET_MINIMIZED_TITLE),
+                    i18n::text(language, i18n::GENERAL_BATTLENET_MINIMIZED_ABOUT),
                     self.hint(
-                        "Without a saved sign-in it comes up as a normal window whatever \
-                         this says, because a sign-in nobody can see is a launch that never \
-                         happens. Opening Battle.net from the game panel always shows it.",
+                        i18n::text(language, i18n::GENERAL_BATTLENET_MINIMIZED_HINT),
                     ),
                     switch("battle.net minimized", self.config.battle_net_minimized, Message::BattleNetMinimized),
                 ),
                 setting(
-                    "Close Battle.net when I press Play",
-                    "Off keeps it open beside the game.",
+                    i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_TITLE),
+                    i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_ABOUT),
                     self.hint(
-                        "Only for Play. Launching through Battle.net, and its own install \
-                         and repair flows, start the client afresh whatever this says.",
+                        i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_HINT),
                     ),
                     switch("close battle.net on play", self.config.close_battle_net_on_play, Message::CloseBattleNetOnPlay),
                 ),
             ]),
             setting_group([
                 setting(
-                    "What's new after an update",
-                    "Once per version. The notes are always under Lightforge Updates.",
+                    i18n::text(language, i18n::GENERAL_NOTES_TITLE),
+                    i18n::text(language, i18n::GENERAL_NOTES_ABOUT),
                     None,
                     switch("release notes", !self.config.patch_notes_muted, Message::ShowReleaseNotes),
                 ),
                 setting(
-                    "Tell me about new releases",
-                    "Asks GitHub once at startup. Nothing is downloaded.",
+                    i18n::text(language, i18n::GENERAL_UPDATES_TITLE),
+                    i18n::text(language, i18n::GENERAL_UPDATES_ABOUT),
                     self.hint(
-                        "Your package manager owns the program, so the notice is a link to \
-                         the releases page. DISCLAIMER.md lists this along with everything \
-                         else Lightforge contacts.",
+                        i18n::text(language, i18n::GENERAL_UPDATES_HINT),
                     ),
                     switch("update check", self.config.check_for_updates, Message::CheckLauncherUpdates),
                 ),
             ]),
             setting_group(self.interface_size_row().into_iter().chain([
                 setting(
-                    "Controller and touch",
-                    "Fullscreen, larger controls and button hints, for a Steam Deck or a TV.",
-                    self.hint("Setup asks on SteamOS; this changes the answer."),
+                    i18n::text(language, i18n::GENERAL_CONTROLLER_TITLE),
+                    i18n::text(language, i18n::GENERAL_CONTROLLER_ABOUT),
+                    self.hint(i18n::text(language, i18n::GENERAL_CONTROLLER_HINT)),
                     switch("controller look", self.console(), Message::ControllerLook),
                 ),
                 setting(
-                    "Steam library",
-                    "A shortcut with Lightforge's artwork, so it starts from Game Mode.",
-                    self.hint("Setup adds it on a Steam Deck."),
-                    secondary("Add to Steam", Message::AddToSteam).enabled(true),
+                    i18n::text(language, i18n::GENERAL_STEAM_TITLE),
+                    i18n::text(language, i18n::GENERAL_STEAM_ABOUT),
+                    self.hint(i18n::text(language, i18n::GENERAL_STEAM_HINT)),
+                    secondary(&i18n::text(language, i18n::GENERAL_STEAM_BUTTON), Message::AddToSteam).enabled(true),
                 ),
             ])),
         ]
@@ -163,16 +201,17 @@ impl Lightforge {
     /// own IPC queue, so two games from one session cannot differ (see
     /// `Config::battle_net_tweaks`).
     pub(crate) fn battle_net_section(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let tweaks = self.tweaks_of(Scope::BattleNet);
         let tools = &self.tools;
         let scope = Scope::BattleNet;
 
         let rows = vec![
             setting(
-                "CPU performance profile",
+                i18n::text(language, "settings-battlenet-cpu-title"),
                 match tools.game_performance {
-                    Some(_) => "Holds the CPU on its performance profile while a game runs.",
-                    None => "Needs CachyOS' game-performance, which is not installed.",
+                    Some(_) => i18n::text(language, "settings-battlenet-cpu-about"),
+                    None => i18n::text(language, "settings-battlenet-cpu-missing"),
                 },
                 None,
                 self.tool_switch(
@@ -184,10 +223,10 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "MangoHud overlay",
+                i18n::text(language, "settings-battlenet-mangohud-title"),
                 match tools.mangohud {
-                    Some(_) => "Frame rate and frame times drawn over the game.",
-                    None => "Needs MangoHud, which is not installed.",
+                    Some(_) => i18n::text(language, "settings-battlenet-mangohud-about"),
+                    None => i18n::text(language, "settings-battlenet-mangohud-missing"),
                 },
                 None,
                 self.tool_switch(
@@ -199,10 +238,10 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "Wayland backend",
-                super::super::game_settings::wayland_about(tools),
+                i18n::text(language, "settings-battlenet-wayland-title"),
+                super::super::game_settings::wayland_about(tools, language),
                 self.hint(
-                    "Newer and less travelled than the X11 path, so it is off until asked for.",
+                    i18n::text(language, "settings-battlenet-wayland-hint"),
                 ),
                 self.tool_switch(
                     "bnet wayland",
@@ -215,14 +254,12 @@ impl Lightforge {
         ];
 
         column![muted(
-            "These apply to Battle.net and every game it starts.".to_owned(),
+            i18n::text(language, "settings-battlenet-intro"),
             theme::LABEL,
         )]
         .extend(
             self.hint(
-                "They cannot be set per game, because Lightforge only gets to choose the \
-                 environment when it starts the client itself: a client that is already \
-                 open is handed the launch over its own message queue.",
+                i18n::text(language, "settings-battlenet-hint"),
             )
             .map(Element::from),
         )
@@ -237,6 +274,7 @@ impl Lightforge {
 
     /// Speed caps, ours and Battle.net's, and pausing while playing.
     pub(crate) fn downloads_section(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let speed = |input: &str, placeholder: &str, on_input: fn(String) -> Message| -> Element<'_, Message> {
             row![
                 clickable(
@@ -262,9 +300,9 @@ impl Lightforge {
 
         setting_group([
             setting(
-                "Game language",
-                "What new games download in. An installed game keeps its own: Modify Install in its cog menu changes it.",
-                self.hint("Battle.net keeps the language it was installed in; it has a setting of its own."),
+                i18n::text(language, i18n::DOWNLOADS_GAME_LANGUAGE_TITLE),
+                i18n::text(language, i18n::DOWNLOADS_GAME_LANGUAGE_ABOUT),
+                self.hint(i18n::text(language, i18n::DOWNLOADS_GAME_LANGUAGE_HINT)),
                 self.picker(
                     "game language".to_owned(),
                     locales,
@@ -276,26 +314,31 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "Download speed limit",
-                "For game downloads. Proton builds and addons are not capped.",
+                i18n::text(language, i18n::DOWNLOADS_SPEED_LIMIT_TITLE),
+                i18n::text(language, i18n::DOWNLOADS_SPEED_LIMIT_ABOUT),
                 None,
-                speed(&self.limit_input, "unlimited", Message::DownloadLimitChanged),
+                speed(
+                    &self.limit_input,
+                    &i18n::text(language, i18n::DOWNLOADS_SPEED_LIMIT_UNLIMITED),
+                    Message::DownloadLimitChanged,
+                ),
             ),
             setting(
-                "Battle.net's speed limit",
-                "Battle.net's own cap, for what it downloads.",
+                i18n::text(language, i18n::DOWNLOADS_BATTLENET_LIMIT_TITLE),
+                i18n::text(language, i18n::DOWNLOADS_BATTLENET_LIMIT_ABOUT),
                 self.hint(
-                    "Read from its config and written back; clearing the field removes the \
-                     setting and restores its default.",
+                    i18n::text(language, i18n::DOWNLOADS_BATTLENET_LIMIT_HINT),
                 ),
-                speed(&self.bnet_limit_input, "none", Message::BattleNetLimitChanged),
+                speed(
+                    &self.bnet_limit_input,
+                    &i18n::text(language, i18n::DOWNLOADS_BATTLENET_LIMIT_NONE),
+                    Message::BattleNetLimitChanged,
+                ),
             ),
             setting(
-                "Pause downloads while playing",
-                "The game you launch always pauses its own; this pauses the rest of the queue.",
-                self.hint(
-                    "The game and the launcher would otherwise be sharing one storage file.",
-                ),
+                i18n::text(language, i18n::DOWNLOADS_PAUSE_TITLE),
+                i18n::text(language, i18n::DOWNLOADS_PAUSE_ABOUT),
+                self.hint(i18n::text(language, i18n::DOWNLOADS_PAUSE_HINT)),
                 switch(
                     "pause while playing",
                     self.config.pause_downloads_while_playing,
@@ -307,34 +350,50 @@ impl Lightforge {
 
     /// The version, where its configuration lives, and the system checks.
     pub(crate) fn about_section(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let (status, asking) = match (&self.launcher_check, &self.newer_release) {
-            (LauncherCheck::Asking, _) => ("Asking GitHub.".to_owned(), true),
-            (LauncherCheck::Failed(why), _) => (format!("Could not check: {why}"), false),
-            (_, Some(newer)) => (format!("Version {} is available.", newer.latest), false),
-            (LauncherCheck::Newest, None) => ("This is the newest version.".to_owned(), false),
+            (LauncherCheck::Asking, _) => (i18n::text(language, "settings-about-checking-status"), true),
+            (LauncherCheck::Failed(why), _) => (
+                format!("{}: {}", i18n::text(language, "settings-about-check-failed"), i18n::error_text(language, why)),
+                false,
+            ),
+            (_, Some(newer)) => (
+                i18n::text_with_args(language, "settings-about-version-available", &[("version", &newer.latest)]),
+                false,
+            ),
+            (LauncherCheck::Newest, None) => (i18n::text(language, "settings-about-current-version"), false),
             (LauncherCheck::Idle, None) => (String::new(), false),
         };
         let controls = row![text(env!("CARGO_PKG_VERSION")).size(theme::BODY).font(theme::MONO)]
             .push(self.newer_release.as_ref().map(|newer| {
                 let label = match self.origin.route(&newer.latest) {
-                    lightforge_core::upgrade::Route::Instructions { .. } => "How to update",
-                    _ => "Update now",
+                    lightforge_core::upgrade::Route::Instructions { .. } => {
+                        i18n::text(language, "settings-about-how-to-update")
+                    }
+                    _ => i18n::text(language, "settings-about-update-now"),
                 };
-                action_button(label, theme::ACCENT, Message::UpdateNow).enabled(!self.upgrading())
+                action_button(&label, theme::ACCENT, Message::UpdateNow).enabled(!self.upgrading())
             }))
             .push(
-                secondary(if asking { "Checking" } else { "Check for updates" }, Message::CheckLauncherNow)
+                secondary(
+                    &if asking {
+                        i18n::text(language, "settings-about-checking")
+                    } else {
+                        i18n::text(language, "settings-about-check-for-updates")
+                    },
+                    Message::CheckLauncherNow,
+                )
                     .enabled(!asking),
             )
             .spacing(theme::MD)
             .align_y(Alignment::Center);
-        let mut rows = vec![setting("Version", status, None, controls)];
+        let mut rows = vec![setting(i18n::text(language, "settings-about-version"), status, None, controls)];
         if let Some(dirs) = &self.dirs {
             rows.push(setting(
-                "Settings file",
+                i18n::text(language, "settings-about-settings-file"),
                 tilde(&dirs.config_file()),
                 None,
-                secondary("Open folder", Message::OpenConfigFolder).enabled(true),
+                secondary(&i18n::text(language, "settings-about-open-folder"), Message::OpenConfigFolder).enabled(true),
             ));
         }
         column![setting_group(rows), self.diagnostics_group()].spacing(theme::MD).into()
@@ -342,21 +401,30 @@ impl Lightforge {
 
     /// `lightforge doctor`, one row per check, and a copy for a bug report.
     fn diagnostics_group(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let running = self.diagnostics == Diagnostics::Running;
         let checks: &[lightforge_core::doctor::Check] = match &self.diagnostics {
             Diagnostics::Done(checks) => checks,
             _ => &[],
         };
         let controls = row![
-            secondary(if running { "Checking" } else { "Run checks" }, Message::RunDiagnostics)
+            secondary(
+                &if running {
+                    i18n::text(language, "settings-about-checking")
+                } else {
+                    i18n::text(language, "settings-about-run-checks")
+                },
+                Message::RunDiagnostics,
+            )
                 .enabled(!running && self.dirs.is_some()),
-            secondary("Copy", Message::CopyDiagnostics).enabled(!checks.is_empty()),
+            secondary(&i18n::text(language, "settings-about-copy"), Message::CopyDiagnostics)
+                .enabled(!checks.is_empty()),
         ]
         .spacing(theme::SM);
 
         let mut rows = vec![setting(
-            "Diagnostics",
-            "What this system has, against what Battle.net and the games need.",
+            i18n::text(language, "settings-about-diagnostics"),
+            i18n::text(language, "settings-about-diagnostics-about"),
             None,
             controls,
         )];
@@ -367,12 +435,12 @@ impl Lightforge {
                 Status::Warn => theme::WARN,
                 Status::Fail => theme::ERROR,
             };
-            let more = check.hint.as_ref().map(|hint| muted(hint.clone(), theme::CAPTION));
+            let more = check.hint.as_ref().map(|hint| muted(lightforge_core::debug::scrub(&i18n::doctor_hint(language, hint)), theme::CAPTION));
             setting(
-                check.name.clone(),
-                lightforge_core::debug::scrub(&check.detail),
+                i18n::doctor_name(language, &check.name),
+                lightforge_core::debug::scrub(&i18n::doctor_detail(language, check, &check.detail)),
                 more,
-                text(check.status.label()).size(theme::LABEL).font(theme::MONO).color(color),
+                text(i18n::doctor_status(language, check.status)).size(theme::LABEL).font(theme::MONO).color(color),
             )
         }));
         setting_group(rows)

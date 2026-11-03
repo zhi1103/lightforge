@@ -4,7 +4,7 @@ use crate::*;
 
 /// The caption under a pre-installed game's button, from Battle.net's
 /// `Available October 19, 2026`: about the servers (it is login that waits).
-pub(crate) fn servers_open(release_date: &str) -> String {
+pub(crate) fn servers_open(release_date: &str, language: &str) -> String {
     let Some(date) = release_date.strip_prefix("Available ") else {
         return release_date.to_owned();
     };
@@ -13,7 +13,7 @@ pub(crate) fn servers_open(release_date: &str) -> String {
         Some((day, year)) if year.len() == 4 && year.bytes().all(|b| b.is_ascii_digit()) => day,
         _ => date,
     };
-    format!("Servers will be available on {date}")
+    crate::i18n::text_with_args(language, "servers-available-on", &[("date", date)])
 }
 
 /// One "name, size, maybe a button" line, as the Storage page draws them.
@@ -52,9 +52,9 @@ pub(crate) fn offered_only(tags: &[String]) -> Vec<String> {
 ///
 /// The manifest's own name is the fallback, for anything added to
 /// [`OFFERED_OPTIONAL`] before it gets a phrase.
-pub(crate) fn optional_label(tag: &str) -> String {
+pub(crate) fn optional_label(tag: &str, language: &str) -> String {
     match tag {
-        "HighRes" => "High-resolution textures".to_owned(),
+        "HighRes" => crate::i18n::text(language, "optional-high-resolution-textures"),
         other => other.to_owned(),
     }
 }
@@ -291,7 +291,7 @@ pub(crate) fn bytes_of(done: u64, total: u64) -> String {
 /// Describe a config that would not load, keeping a copy of it aside.
 ///
 /// The whole error chain, down to the line and column.
-pub(crate) fn broken_config(error: &lightforge_core::config::ConfigError, path: &Path) -> String {
+pub(crate) fn broken_config(error: &lightforge_core::config::ConfigError, path: &Path, language: &str) -> String {
     let mut message = error.to_string();
     let mut source = std::error::Error::source(error);
     while let Some(cause) = source {
@@ -300,7 +300,7 @@ pub(crate) fn broken_config(error: &lightforge_core::config::ConfigError, path: 
     }
     let backup = path.with_extension("toml.broken");
     if std::fs::copy(path, &backup).is_err() {
-        message.push_str("\n(could not save a copy to config.toml.broken)");
+        message.push_str(&format!("\n{}", crate::i18n::text(language, "dialog-config-backup-failed")));
     }
     format!("{}\n\n{message}", path.display())
 }
@@ -346,15 +346,15 @@ pub(crate) fn rate_of(per_second: u64) -> String {
     }
 }
 
-pub(crate) fn eta_of(progress: state::Progress) -> String {
+pub(crate) fn eta_of(language: &str, progress: state::Progress) -> String {
     match progress.eta() {
-        None => "ETA —".to_owned(),
+        None => crate::i18n::text(language, "download-eta-unknown"),
         Some(eta) => {
             let secs = eta.as_secs();
             match secs {
-                0..=59 => format!("ETA {secs}s"),
-                60..=3599 => format!("ETA {}m", secs / 60),
-                _ => format!("ETA {}h {}m", secs / 3600, (secs % 3600) / 60),
+                0..=59 => crate::i18n::text_with_args(language, "download-eta-seconds", &[("seconds", &secs.to_string())]),
+                60..=3599 => crate::i18n::text_with_args(language, "download-eta-minutes", &[("minutes", &(secs / 60).to_string())]),
+                _ => crate::i18n::text_with_args(language, "download-eta-hours-minutes", &[("hours", &(secs / 3600).to_string()), ("minutes", &((secs % 3600) / 60).to_string())]),
             }
         }
     }

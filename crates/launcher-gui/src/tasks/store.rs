@@ -18,6 +18,7 @@ pub struct Scanned {
 pub async fn scan_and_repair(
     layout: Layout,
     code: ProductCode,
+    language: String,
     tx: tokio::sync::watch::Sender<lightforge_core::tact::verify::Progress>,
 ) -> Result<Scanned, String> {
     tokio::task::spawn_blocking(move || {
@@ -27,10 +28,10 @@ pub async fn scan_and_repair(
         use lightforge_core::preflight;
 
         if let Some(game) = preflight::games_running(&layout).first() {
-            return Err(format!("close {} first — the store is in use", game.name));
+            return Err(crate::i18n::text_with_args(&language, "store-game-in-use", &[("game", &game.name)]));
         }
         if preflight::client_running(&layout) {
-            return Err("close Battle.net first — the store is in use".to_owned());
+            return Err(crate::i18n::text(&language, "store-battlenet-in-use"));
         }
         if !preflight::scan(&layout).is_empty() {
             let runner = runner_for(&layout, &code, Runs::Game)?;
@@ -183,6 +184,7 @@ pub async fn uninstall(
     http: Option<Http>,
     layout: Layout,
     code: ProductCode,
+    language: String,
     copied: std::sync::Arc<std::sync::atomic::AtomicU64>,
 ) -> Result<u64, Problem> {
     use lightforge_core::tact::{productdb, reclaim, uninstall};
@@ -192,7 +194,7 @@ pub async fn uninstall(
         .await
         .map_err(|e| Problem::of(&e))?;
     if let Some(process) = busy.first() {
-        return Err(format!("close {} first — the game files are in use", process.name).into());
+        return Err(crate::i18n::text_with_args(&language, "store-game-files-in-use", &[("game", &process.name)]).into());
     }
 
     let install = layout.wow_install(&code);
@@ -249,6 +251,7 @@ pub async fn optional_plan(
 pub async fn optional_remove(
     layout: Layout,
     code: ProductCode,
+    language: String,
     plan: lightforge_core::tact::reclaim::Reclaim,
 ) -> Result<u64, Problem> {
     let alive = layout.clone();
@@ -256,7 +259,7 @@ pub async fn optional_remove(
         .await
         .map_err(|e| Problem::of(&e))?;
     if let Some(process) = busy.first() {
-        return Err(format!("close {} first — the game files are in use", process.name).into());
+        return Err(crate::i18n::text_with_args(&language, "store-game-files-in-use", &[("game", &process.name)]).into());
     }
     let install = layout.wow_install(&code);
     tokio::task::spawn_blocking(move || {
@@ -299,6 +302,7 @@ pub async fn free_unused(
     http: Option<Http>,
     layout: Layout,
     install: PathBuf,
+    language: String,
     copied: std::sync::Arc<std::sync::atomic::AtomicU64>,
 ) -> Result<u64, String> {
     use lightforge_core::tact::{compact, reclaim};
@@ -309,7 +313,7 @@ pub async fn free_unused(
         .await
         .map_err(|e| chain(&e))?;
     if let Some(process) = busy.first() {
-        return Err(format!("close {} first — the game files are in use", process.name));
+        return Err(crate::i18n::text_with_args(&language, "store-game-files-in-use", &[("game", &process.name)]));
     }
 
     let prune = reclaim::plan_unused(&http, &install).await.map_err(|e| chain(&e))?;
@@ -416,9 +420,13 @@ pub async fn clear_shader_cache(dir: PathBuf) -> Result<bool, String> {
 }
 
 /// Delete a game's `Cache` folder; the client writes a new one on start.
-pub async fn clear_game_cache(cache: PathBuf) -> Result<(), String> {
+pub async fn clear_game_cache(cache: PathBuf, language: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || match std::fs::remove_dir_all(&cache) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("could not clear {}: {e}", cache.display())),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(crate::i18n::text_with_args(
+            &language,
+            "error-could-not-clear-path",
+            &[("path", &cache.display().to_string()), ("error", &e.to_string())],
+        )),
         _ => Ok(()),
     })
     .await
@@ -461,7 +469,9 @@ mod uninstall_tests {
 
         let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
         // No client: the reclaim is skipped, which is what this test isolates.
-        runtime.block_on(uninstall(None, layout.clone(), ProductCode::ClassicEra, Default::default())).unwrap();
+        runtime
+            .block_on(uninstall(None, layout.clone(), ProductCode::ClassicEra, "en-US".to_owned(), Default::default()))
+            .unwrap();
 
         assert!(!era.exists());
         assert!(

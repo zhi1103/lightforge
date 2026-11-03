@@ -71,7 +71,7 @@ impl Lightforge {
                     if !self.resume_after_play.contains(&code) {
                         self.resume_after_play.push(code);
                     }
-                    self.status = "resumes when the game closes".to_owned();
+                    self.status = i18n::text(&self.config.interface_language, "status-resumes-when-game-closes").to_owned();
                     return Ok(Task::none());
                 }
                 // Back to the end of the queue instead of jumping the line:
@@ -101,7 +101,7 @@ impl Lightforge {
                 };
                 self.config.set_locale(&locale, on_disk);
                 self.save_config();
-                self.status = format!("new games download in {}", locale_name(&locale));
+                self.status = i18n::text_with_args(&self.config.interface_language, "status-new-games-language", &[("language", locale_name(&locale))]);
                 Task::none()
             }
 
@@ -115,7 +115,7 @@ impl Lightforge {
                 self.gear_open = false;
                 self.busy = true;
                 self.error = None;
-                self.status = "checking for updates…".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-checking-for-updates").to_owned();
                 let code = self.selected.code.clone();
                 Task::perform(
                     tasks::offerings(
@@ -143,9 +143,9 @@ impl Lightforge {
                         );
                         self.remote = Some(offerings.remote.clone());
                         self.status = match current {
-                            true => format!("up to date on {}", offerings.remote.versions_name),
+                            true => i18n::text_with_args(&self.config.interface_language, "status-up-to-date-on", &[("version", &offerings.remote.versions_name)]),
                             false => {
-                                format!("{} is available", offerings.remote.versions_name)
+                                i18n::text_with_args(&self.config.interface_language, "status-version-available", &[("version", &offerings.remote.versions_name)])
                             }
                         };
                     }
@@ -200,8 +200,8 @@ impl Lightforge {
                         if let Some(at) = entry {
                             self.queue.remove(at);
                         }
-                        note(self, "pre-downloaded, ready for release day".to_owned());
-                        let told = self.notify_unseen(&code, "is pre-downloaded", "Ready for release day".to_owned());
+                        note(self, i18n::text(&self.config.interface_language, "status-pre-downloaded"));
+                        let told = self.notify_unseen(&code, "is pre-downloaded", i18n::text(&self.config.interface_language, "status-ready-for-release-day"));
                         Task::batch([self.pump(), self.reload_if_showing(&code), told])
                     }
                     Ok(done) if done.complete => {
@@ -227,8 +227,8 @@ impl Lightforge {
                             }
                         }
                         let installed = match done.version {
-                            Some(v) => format!("installed {v}"),
-                            None => format!("stored {} files", done.files),
+                            Some(v) => i18n::text_with_args(&self.config.interface_language, "status-installed-version", &[("version", &v)]),
+                            None => i18n::text_with_args(&self.config.interface_language, "status-stored-files", &[("count", &done.files.to_string())]),
                         };
                         let told = self.notify_unseen(&code, "is ready to play", installed.clone());
                         note(self, installed);
@@ -241,7 +241,7 @@ impl Lightforge {
                             let reached = job_progress(d.job, &d.sample, 0);
                             self.queue[at].stage = Stage::Paused(reached);
                         }
-                        note(self, "paused".to_owned());
+                        note(self, i18n::text(&self.config.interface_language, "status-paused"));
                         self.pump()
                     }
                     Ok(done) => {
@@ -258,7 +258,7 @@ impl Lightforge {
                         };
                         tracing::warn!("{} stopped without finishing{why}", code.as_str());
                         let told = self.notify_unseen(&code, "stopped downloading", done.reasons.join("; "));
-                        note(self, format!("stopped{why} — run again to retry"));
+                        note(self, i18n::text_with_args(&self.config.interface_language, "status-stopped-retry", &[("why", &why)]));
                         Task::batch([self.pump(), self.reload_if_showing(&code), told])
                     }
                     Err(e) => {
@@ -335,15 +335,13 @@ impl Lightforge {
                     Ok(freed) => {
                         if code == self.selected.code {
                             self.status =
-                                format!("cancelled {label} — freed {}", size_of(freed));
+                                i18n::text_with_args(&self.config.interface_language, "status-cancelled-freed", &[("game", &label), ("size", &size_of(freed))]);
                         }
                     }
                     // Cancelled, but the clean-up failed: say so.
                     Err(e) => {
-                        self.error = Some(format!(
-                            "{label} was cancelled, but its files could not be \
-                             removed: {e}"
-                        ).into());
+                        let e = i18n::transfer_error(&self.config.interface_language, &e);
+                        self.error = Some(i18n::text_with_args(&self.config.interface_language, "error-cancelled-could-not-delete", &[("game", &label), ("error", &e)]).into());
                     }
                 }
                 Task::batch([
@@ -364,7 +362,7 @@ impl Lightforge {
                 // Finished while the dialog was open: there is no download
                 // left to give up, and its files are now an install.
                 if !self.queue.iter().any(|d| d.code == code) {
-                    self.status = format!("{} had already finished; nothing was cancelled", dialog.label);
+                    self.status = i18n::text_with_args(&self.config.interface_language, "status-download-already-finished", &[("game", &dialog.label)]);
                     return Ok(Task::none());
                 }
                 // A pre-download sits beside an installed game, and the
@@ -373,8 +371,8 @@ impl Lightforge {
                 let delete = delete && !self.queue.iter().any(|d| d.code == code && d.pre_download);
                 self.drop_transfer(&code);
                 self.status = match delete {
-                    true => "cancelled — removing the files…".to_owned(),
-                    false => "cancelled".to_owned(),
+                    true => i18n::text(&self.config.interface_language, "status-cancelled-removing-files"),
+                    false => i18n::text(&self.config.interface_language, "status-cancelled"),
                 };
                 if !delete {
                     return Ok(self.pump());

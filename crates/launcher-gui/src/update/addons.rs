@@ -147,7 +147,7 @@ impl Lightforge {
                 }
                 self.addons_busy = true;
                 self.error = None;
-                self.addon_auto_note = Some("looking up what is installed…".to_owned());
+                self.addon_auto_note = Some(i18n::text(&self.config.interface_language, "addons-looking-up-installed"));
                 Task::perform(
                     addonwork::adopt(
                         self.http.clone(),
@@ -164,11 +164,9 @@ impl Lightforge {
                 match *result {
                     Ok(adopted) => {
                         self.addon_auto_note = Some(match adopted.len() {
-                            0 => "nothing new recognised — every addon here is \
-                                  either already managed or not on CurseForge"
-                                .to_owned(),
-                            1 => format!("{} is now managed", adopted[0].name),
-                            n => format!("{n} addons are now managed"),
+                            0 => i18n::text(&self.config.interface_language, "addons-nothing-new-recognised"),
+                            1 => i18n::text_with_args(&self.config.interface_language, "addons-now-managed-one", &[("name", &adopted[0].name)]),
+                            n => i18n::text_with_args(&self.config.interface_language, "addons-now-managed-many", &[("count", &n.to_string())]),
                         });
                         Task::perform(
                             addonwork::list(self.layout.clone(), self.selected.code.clone()),
@@ -219,7 +217,7 @@ impl Lightforge {
                 match addonwork::export(&self.layout, &self.selected.code) {
                     Ok(token) => {
                         self.export_token = token;
-                        self.status = "export ready".to_owned();
+                        self.status = i18n::text(&self.config.interface_language, "status-export-ready").to_owned();
                     }
                     Err(e) => self.error = Some(e.into()),
                 }
@@ -402,8 +400,8 @@ impl Lightforge {
                     Ok(Some(report)) => {
                         if !report.installed.is_empty() {
                             self.addon_auto_note = Some(match report.installed.len() {
-                                1 => format!("{} updated automatically", report.installed[0]),
-                                n => format!("{n} addons updated automatically"),
+                                1 => i18n::text_with_args(&self.config.interface_language, "addons-updated-automatically-one", &[("name", &report.installed[0])]),
+                                n => i18n::text_with_args(&self.config.interface_language, "addons-updated-automatically-many", &[("count", &n.to_string())]),
                             });
                             tasks.push(Task::perform(
                                 addonwork::list(
@@ -416,7 +414,7 @@ impl Lightforge {
                     }
                     // Said quietly and only here: a launcher that cannot
                     // reach CurseForge is not a launcher that cannot play.
-                    Err(e) => self.addon_auto_note = Some(format!("addon check failed: {e}")),
+                    Err(e) => self.addon_auto_note = Some(i18n::text_with_args(&self.config.interface_language, "addons-check-failed", &[("error", &e.to_string())])),
                 }
 
                 // Whoever was waiting on this can go now.
@@ -432,7 +430,7 @@ impl Lightforge {
                     return Ok(Task::none());
                 }
                 if let Some(problem) = &listing.problem {
-                    self.error = Some(format!("the addon list cannot be read: {problem}").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "addons-list-unreadable", &[("error", &problem.to_string())]).into());
                 }
                 self.addons = *listing;
                 Task::none()
@@ -555,7 +553,7 @@ impl Lightforge {
 
             Message::AddonRemoved(result) => {
                 match result {
-                    Ok(folders) => self.status = format!("removed {}", folders.join(", ")),
+                    Ok(folders) => self.status = i18n::text_with_args(&self.config.interface_language, "addons-removed", &[("names", &folders.join(", "))]),
                     Err(e) => self.error = Some(e.into()),
                 }
                 Task::perform(

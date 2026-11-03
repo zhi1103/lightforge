@@ -17,12 +17,12 @@ impl Lightforge {
         match category {
             Category::Addons => {
                 let dir = self.layout.addons_dir(code);
-                let _ = writeln!(out, "\n--- addons: {} ---", dir.display());
-                let _ = writeln!(out, "{:<16}{}", "flavor", lightforge_core::addons::flavor_of(code));
+                let _ = writeln!(out, "\n--- {}: {} ---", i18n::text(&self.config.interface_language, "report-attachment-addons"), dir.display());
+                let _ = writeln!(out, "{}: {}", i18n::text(&self.config.interface_language, "report-addon-flavor"), lightforge_core::addons::flavor_of(code));
                 let installed = match lightforge_core::addons::scan(&dir, &lightforge_core::addons::Client::default()) {
                     Ok(installed) => installed,
                     Err(e) => {
-                        let _ = writeln!(out, "the folder could not be read: {}", chain(&e));
+                        let _ = writeln!(out, "{}", i18n::text_with_args(&self.config.interface_language, "report-addon-folder-error", &[("error", &chain(&e))]));
                         Vec::new()
                     }
                 };
@@ -35,14 +35,14 @@ impl Lightforge {
                 let ledger = match ledger {
                     Some(Ok(ledger)) => ledger,
                     Some(Err(e)) => {
-                        let _ = writeln!(out, "the ledger could not be read: {}", chain(&e));
+                        let _ = writeln!(out, "{}", i18n::text_with_args(&self.config.interface_language, "report-addon-ledger-error", &[("error", &chain(&e))]));
                         lightforge_core::addons::Ledger::default()
                     }
                     None => lightforge_core::addons::Ledger::default(),
                 };
                 let rows = addonwork::rows_from(&installed, &ledger);
                 let managed = rows.iter().filter(|r| r.managed.is_some() && r.child_of.is_none()).count();
-                let _ = writeln!(out, "{:<16}{} folders, {managed} managed", "installed", rows.len());
+                let _ = writeln!(out, "{}", i18n::text_with_args(&self.config.interface_language, "report-addon-folders", &[("count", &rows.len().to_string()), ("managed", &managed.to_string())]));
                 for row in rows.iter().filter(|r| r.child_of.is_none()) {
                     let owner = match &row.managed {
                         Some(m) => {
@@ -61,7 +61,7 @@ impl Lightforge {
                             }
                             owner
                         }
-                        None => "not managed".to_owned(),
+                        None => i18n::text(&self.config.interface_language, "report-addon-not-managed"),
                     };
                     let children = rows
                         .iter()
@@ -69,31 +69,38 @@ impl Lightforge {
                         .count();
                     let children = match children {
                         0 => String::new(),
-                        n => format!(" (+{n} folders)"),
+                        n => format!(
+                            " ({})",
+                            i18n::text_with_args(
+                                &self.config.interface_language,
+                                "report-addon-child-folders",
+                                &[("count", &n.to_string())],
+                            )
+                        ),
                     };
                     let _ = writeln!(out, "{}{children}  {}  {owner}", row.folder, row.version);
                 }
             }
             Category::Downloader => {
-                let _ = writeln!(out, "\n--- downloads ---");
+                let _ = writeln!(out, "\n--- {} ---", i18n::text(&self.config.interface_language, "report-attachment-downloads"));
                 if self.queue.is_empty() {
-                    let _ = writeln!(out, "nothing queued");
+                    let _ = writeln!(out, "{}", i18n::text(&self.config.interface_language, "report-downloads-empty"));
                 }
                 for download in &self.queue {
                     let stage = match &download.stage {
-                        Stage::Queued => "queued".to_owned(),
-                        Stage::Running { .. } => "running".to_owned(),
+                        Stage::Queued => i18n::text(&self.config.interface_language, "report-download-queued"),
+                        Stage::Running { .. } => i18n::text(&self.config.interface_language, "report-download-running"),
                         Stage::Paused(p) => {
-                            format!("paused at {} of {}", size_of(p.downloaded_bytes), size_of(p.total_bytes))
+                            i18n::text_with_args(&self.config.interface_language, "report-download-paused", &[("done", &size_of(p.downloaded_bytes)), ("total", &size_of(p.total_bytes))])
                         }
                     };
-                    let planned = download.job.total.map_or("not planned yet".to_owned(), size_of);
+                    let planned = download.job.total.map_or_else(|| i18n::text(&self.config.interface_language, "report-download-not-planned"), size_of);
                     let _ = writeln!(out, "{} ({})  {stage}  job {planned}", download.label, download.code.as_str());
                 }
-                let _ = writeln!(out, "\n--- libraries ---");
+                let _ = writeln!(out, "\n--- {} ---", i18n::text(&self.config.interface_language, "report-attachment-libraries"));
                 for library in &self.config.libraries {
-                    let disk = library.disk().map_or("size unavailable".to_owned(), |d| {
-                        format!("{} free of {}", size_of(d.free), size_of(d.total))
+                    let disk = library.disk().map_or_else(|| i18n::text(&self.config.interface_language, "report-library-size-unavailable"), |d| {
+                        i18n::text_with_args(&self.config.interface_language, "report-library-free", &[("free", &size_of(d.free)), ("total", &size_of(d.total))])
                     });
                     let _ = writeln!(
                         out,
@@ -126,7 +133,7 @@ impl Lightforge {
                 match config.to_toml() {
                     Ok(toml) => out.push_str(&toml),
                     Err(e) => {
-                        let _ = writeln!(out, "could not be rendered: {}", chain(&e));
+                        let _ = writeln!(out, "{}", i18n::text_with_args(&self.config.interface_language, "report-addon-render-error", &[("error", &chain(&e))]));
                     }
                 }
             }
@@ -140,10 +147,11 @@ impl Lightforge {
     /// The bug report and the feedback dialog, one card: they differ in the
     /// prompt and in whether the bundle is shown and sent.
     pub(crate) fn report_card<'a>(&'a self, dialog: &'a ReportDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let (title, prompt) = match dialog.kind {
-            ReportKind::Bug => ("Report a Bug", "What were you doing when this occurred?"),
+            ReportKind::Bug => (i18n::text(language, "report-title-bug"), i18n::text(language, "report-prompt-bug")),
             ReportKind::Feedback => {
-                ("Send Feedback", "What would you like to see improved or changed?")
+                (i18n::text(language, "app-menu-feedback"), i18n::text(language, "report-prompt-feedback"))
             }
         };
         // Editable right up until it is on its way: a report that failed, or
@@ -152,11 +160,11 @@ impl Lightforge {
 
         let mut body = column![
             self.picker(
-                "report category".to_owned(),
-                report::Category::ALL.to_vec(),
-                dialog.category,
-                "What is it about?",
-                Message::ReportCategory,
+                i18n::text(language, "report-category-label"),
+                report::Category::ALL.into_iter().map(|category| ReportCategoryLabel(category, i18n::text(language, category.message_id()))).collect(),
+                dialog.category.map(|category| ReportCategoryLabel(category, i18n::text(language, category.message_id()))),
+                i18n::text(language, "report-category-placeholder").as_str(),
+                |option| Message::ReportCategory(option.0),
                 Length::Fill,
                 theme::BODY,
             ),
@@ -176,11 +184,10 @@ impl Lightforge {
             clickable(
                 "report contact",
                 text_input(
-                    match dialog.kind {
-                        ReportKind::Bug => "Email or Discord name, so I can reach you (required)",
-                        ReportKind::Feedback => {
-                            "Email or Discord name, so I can reach you (optional)"
-                        }
+                    &if dialog.kind == ReportKind::Bug {
+                        i18n::text(language, "report-contact-required")
+                    } else {
+                        i18n::text(language, "report-contact-optional")
                     },
                     &dialog.contact,
                 )
@@ -196,8 +203,7 @@ impl Lightforge {
             // Shown in full before sending, so the promise can be checked.
             ReportKind::Bug => body
                 .push(muted(
-                    "This exact diagnostic data will be sent to my private server securely."
-                        .to_owned(),
+                    i18n::text(language, "report-bug-data-promise"),
                     theme::LABEL,
                 ))
                 .push(
@@ -212,21 +218,19 @@ impl Lightforge {
                 )
                 .push(self.shot_row(dialog)),
             ReportKind::Feedback => body.push(muted(
-                "This will be sent directly to me securely.".to_owned(),
+                i18n::text(language, "report-feedback-promise"),
                 theme::LABEL,
             )),
         };
 
         if let Some((note, color)) = match dialog.stage {
-            ReportStage::Sent => Some(("Sent — thank you.".to_owned(), theme::OK)),
+            ReportStage::Sent => Some((i18n::text(language, "report-sent"), theme::OK)),
             ReportStage::Failed => Some((
-                "It could not be sent. Try again, or copy it and send it on Discord \
-                 instead — closing this loses it."
-                    .to_owned(),
+                i18n::text(language, "report-send-failed"),
                 theme::ERROR,
             )),
             ReportStage::TooSoon => Some((
-                "That exact report just went out. Add what changed, or close this.".to_owned(),
+                i18n::text(language, "report-too-soon"),
                 theme::PLAY,
             )),
             _ => None,
@@ -234,7 +238,7 @@ impl Lightforge {
             body = body.push(text(note).size(theme::LABEL).color(color));
         }
 
-        let actions = report_actions(dialog, writing);
+        let actions = report_actions(dialog, writing, language);
 
         container(column![section(title, body.into()), actions].spacing(theme::LG))
             .width(Length::Fixed(560.0))
@@ -247,7 +251,8 @@ impl Lightforge {
     ///
     /// A button for the desktop's file dialog, through the XDG portal.
     pub(crate) fn shot_row<'a>(&self, dialog: &'a ReportDialog) -> Element<'a, Message> {
-        let choose = |label: &'static str| {
+        let language = &self.config.interface_language;
+        let choose = |label: String| {
             tappable(
                 "screenshot",
                 Some(Message::ReportShotPick),
@@ -259,8 +264,8 @@ impl Lightforge {
 
         let Some(shot) = &dialog.shot else {
             return row![
-                choose("Add a screenshot…"),
-                muted("Optional, and it is sent with the report.".to_owned(), theme::LABEL),
+                choose(i18n::text(language, "report-add-screenshot")),
+                muted(i18n::text(language, "report-screenshot-optional"), theme::LABEL),
             ]
             .spacing(theme::SM)
             .align_y(Alignment::Center)
@@ -282,11 +287,11 @@ impl Lightforge {
             ]
             .spacing(theme::XS)
             .width(Length::Fill),
-            choose("Replace…"),
+            choose(i18n::text(language, "report-replace-screenshot")),
             tappable(
                 "remove screenshot",
                 Some(Message::ReportShotCleared),
-                button(text("Remove").size(theme::LABEL))
+                button(text(i18n::text(language, i18n::COMMON_REMOVE)).size(theme::LABEL))
                     .padding(theme::tap([theme::XS, theme::SM]))
                     .style(theme::outlined),
             ),
@@ -297,9 +302,18 @@ impl Lightforge {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReportCategoryLabel(report::Category, String);
+
+impl std::fmt::Display for ReportCategoryLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.1)
+    }
+}
+
 /// Cancel, Send, and Copy once a send has failed; Close once it has arrived.
-fn report_actions(dialog: &ReportDialog, writing: bool) -> Element<'_, Message> {
-    let choice = |label: &'static str| {
+fn report_actions<'a>(dialog: &'a ReportDialog, writing: bool, language: &str) -> Element<'a, Message> {
+    let choice = |label: String| {
         button(text(label).size(theme::LABEL).width(Length::Fill).center())
             .width(Length::Fixed(150.0))
             .padding(theme::tap([theme::SM, theme::MD]))
@@ -312,7 +326,7 @@ fn report_actions(dialog: &ReportDialog, writing: bool) -> Element<'_, Message> 
             tappable(
                 "close",
                 Some(Message::ReportCancel),
-                choice("Close").style(theme::filled(theme::ACCENT)),
+                choice(crate::i18n::text(language, "common-close")).style(theme::filled(theme::ACCENT)),
             ),
         ],
         _ => row![
@@ -322,23 +336,23 @@ fn report_actions(dialog: &ReportDialog, writing: bool) -> Element<'_, Message> 
                 ReportStage::Failed => tappable(
                     "copy report",
                     Some(Message::ReportCopy),
-                    choice("Copy report").style(theme::outlined),
+                    choice(crate::i18n::text(language, "report-copy-report")).style(theme::outlined),
                 ),
                 _ => Element::from(Space::new().width(Length::Shrink)),
             },
-            tappable("cancel", Some(Message::ReportCancel), choice("Cancel").style(theme::outlined)),
+            tappable("cancel", Some(Message::ReportCancel), choice(crate::i18n::text(language, "common-cancel")).style(theme::outlined)),
             tappable(
                 "send",
                 // A description, a category, and for a bug a contact.
                 (writing && dialog.stage != ReportStage::TooSoon && dialog.can_send())
                     .then_some(Message::ReportSend),
                 choice(match dialog.stage {
-                    ReportStage::Sending => "Sending…",
-                    ReportStage::Failed => "Try again",
-                    ReportStage::TooSoon => "Just sent",
+                    ReportStage::Sending => crate::i18n::text(language, "report-sending"),
+                    ReportStage::Failed => crate::i18n::text(language, "report-try-again"),
+                    ReportStage::TooSoon => crate::i18n::text(language, "report-just-sent"),
                     _ => match dialog.kind {
-                        ReportKind::Bug => "Send Bug Report",
-                        ReportKind::Feedback => "Send Feedback",
+                        ReportKind::Bug => crate::i18n::text(language, "report-send-bug"),
+                        ReportKind::Feedback => crate::i18n::text(language, "app-menu-feedback"),
                     },
                 })
                 .style(theme::filled(theme::ACCENT)),

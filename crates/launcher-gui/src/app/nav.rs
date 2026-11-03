@@ -77,15 +77,12 @@ impl Lightforge {
             let steam = lightforge_core::steam::SteamRoot::discover()
                 .ok_or_else(|| chain(&steam_shortcut::ShortcutError::NoSteam))?;
             let exe = lightforge_core::upgrade::lasting_exe()
-                .map_err(|e| format!("where Lightforge is: {e}"))?;
+                .map_err(|e| i18n::text_with_args(&self.config.interface_language, "steam-shortcut-location-error", &[("error", &e.to_string())]))?;
             steam_shortcut::add(&steam, "Lightforge", &exe, &STEAM_ART).map_err(|e| chain(&e))
         })();
         self.steam_shortcut = Some(outcome.map(|added| match added.updated {
-            true => "Lightforge's entry in Steam is up to date. Steam shows changes the next \
-                     time it starts."
-                .to_owned(),
-            false => "Lightforge is in your Steam library from the next time Steam starts."
-                .to_owned(),
+            true => i18n::text(&self.config.interface_language, "steam-shortcut-updated").to_owned(),
+            false => i18n::text(&self.config.interface_language, "steam-shortcut-added").to_owned(),
         }));
     }
 
@@ -131,13 +128,17 @@ impl Lightforge {
                     ..container::Style::default()
                 })
         };
-        let hint = |letter, label: &'static str| {
+        let hint = |letter, label: String| {
             row![glyph(letter), text(label).size(theme::BODY)]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center)
         };
         container(
-            row![Space::new().width(Length::Fill), hint("A", "Select"), hint("B", "Back")]
+            row![
+                Space::new().width(Length::Fill),
+                hint("A", i18n::text(&self.config.interface_language, "console-hint-select")),
+                hint("B", i18n::text(&self.config.interface_language, "console-hint-back")),
+            ]
                 .spacing(theme::LG)
                 .align_y(Alignment::Center),
         )

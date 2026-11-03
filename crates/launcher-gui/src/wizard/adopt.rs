@@ -26,7 +26,7 @@ pub(super) fn mark_known(app: &mut Lightforge) {
     for row in wizard.rows.iter_mut().filter(|row| row.blocked.is_none()) {
         if known(row) {
             row.take = false;
-            row.blocked = Some("already in Lightforge".to_owned());
+            row.blocked = Some(crate::i18n::text(&app.config.interface_language, "wizard-already-in-lightforge"));
         }
     }
 }
@@ -46,9 +46,10 @@ pub(super) fn adopt_taken(app: &mut Lightforge) {
         match &row.kind {
             RowKind::Wow(install) => match adopt_one(app, install) {
                 Ok(mut found) => notes.append(&mut found),
-                Err(e) => notes.push(Note::failed(format!(
-                    "{} could not be added: {e}",
-                    install.path.display()
+                Err(e) => notes.push(Note::failed(crate::i18n::text_with_args(
+                    &app.config.interface_language,
+                    "wizard-could-not-add-install",
+                    &[("path", &install.path.display().to_string()), ("error", &e)],
                 ))),
             },
             RowKind::Game(game) => {
@@ -67,7 +68,7 @@ pub(super) fn adopt_taken(app: &mut Lightforge) {
         for row in &mut wizard.rows {
             if row.take {
                 row.take = false;
-                row.blocked = Some("already added".to_owned());
+                row.blocked = Some(crate::i18n::text(&app.config.interface_language, "wizard-already-added"));
             }
         }
     }
@@ -85,16 +86,17 @@ fn adopt_one(app: &mut Lightforge, install: &WowInstall) -> Result<Vec<Note>, St
             let id = adopted.library.id.clone();
             let label = adopted.library.label.clone();
             if adopted.repaired {
-                notes.push(Note::warning(format!(
-                    "{} would not accept a file; its owner-write permission was added",
-                    install.path.display()
+                notes.push(Note::warning(crate::i18n::text_with_args(
+                    &app.config.interface_language,
+                    "wizard-owner-write-added",
+                    &[("path", &install.path.display().to_string())],
                 )));
             }
             if let Some(reason) = adopted.battle_net {
-                notes.push(Note::warning(format!(
-                    "Battle.net was not told about {}, so you may have to use its own \
-                     Locate button for this one: {reason}",
-                    install.path.display()
+                notes.push(Note::warning(crate::i18n::text_with_args(
+                    &app.config.interface_language,
+                    "wizard-battlenet-not-told",
+                    &[("path", &install.path.display().to_string()), ("error", &reason)],
                 )));
             }
             app.config.libraries.push(adopted.library);
@@ -108,7 +110,7 @@ fn adopt_one(app: &mut Lightforge, install: &WowInstall) -> Result<Vec<Note>, St
                 .libraries
                 .iter()
                 .find(|l| l.games() == parent)
-                .ok_or_else(|| "that folder is managed but its drive is gone".to_owned())?;
+            .ok_or_else(|| crate::i18n::text(&app.config.interface_language, "wizard-managed-drive-gone"))?;
             (library.id.clone(), library.label.clone())
         }
         Err(e) => return Err(chain(&e)),
@@ -133,19 +135,24 @@ fn adopt_one(app: &mut Lightforge, install: &WowInstall) -> Result<Vec<Note>, St
     // Only with a prefix; otherwise building it links the library.
     if lightforge_core::prefix::PrefixStatus::inspect(&app.layout).initialized {
         if let Err(e) = lightforge_core::prefix::link_libraries(&app.layout) {
-            notes.push(Note::warning(format!("the prefix could not be relinked: {}", chain(&e))));
+            notes.push(Note::warning(crate::i18n::text_with_args(
+                &app.config.interface_language,
+                "wizard-prefix-relink-failed",
+                &[("error", &chain(&e))],
+            )));
         }
     }
     notes.insert(
         0,
-        Note::done(format!(
-            "{} — kept where it is, on {label}",
-            install
+        Note::done(crate::i18n::text_with_args(
+            &app.config.interface_language,
+            "wizard-kept-install",
+            &[("games", &install
                 .products
                 .iter()
                 .map(|code| code.short_name().to_owned())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", ")), ("drive", &label)],
         )),
     );
     Ok(notes)
@@ -210,12 +217,12 @@ pub(super) fn link_hand_offs(app: &mut Lightforge, pending: &[(HandOff, PathBuf)
     }
     app.status = match (linked.is_empty(), missed.is_empty()) {
         (true, true) => return,
-        (false, true) => format!("Battle.net now knows about {}", linked.join(", ")),
-        (true, false) => format!("{} — ask Battle.net to locate these", missed.join(", ")),
-        (false, false) => format!(
-            "Battle.net now knows about {}; ask it to locate {}",
-            linked.join(", "),
-            missed.join(", ")
+        (false, true) => crate::i18n::text_with_args(&app.config.interface_language, "wizard-battlenet-knows", &[("games", &linked.join(", "))]),
+        (true, false) => crate::i18n::text_with_args(&app.config.interface_language, "wizard-battlenet-locate", &[("games", &missed.join(", "))]),
+        (false, false) => crate::i18n::text_with_args(
+            &app.config.interface_language,
+            "wizard-battlenet-knows-and-locate",
+            &[("linked", &linked.join(", ")), ("missed", &missed.join(", "))],
         ),
     };
 }

@@ -34,11 +34,11 @@ impl Lightforge {
                 // Any writer, not only this product's own: the store is shared,
                 // and a reclaim rewrites archives another flavour is writing.
                 if let Some(what) = self.store_writer() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", what)]).into());
                     return Ok(Task::none());
                 }
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 let Some(dialog) = self.uninstall_dialog.as_mut() else {
@@ -48,7 +48,7 @@ impl Lightforge {
                 let code = dialog.code.clone();
                 let http = self.http.clone();
                 Task::perform(
-                    tasks::uninstall(http, self.layout.clone(), code.clone(), dialog.copied.clone()),
+                    tasks::uninstall(http, self.layout.clone(), code.clone(), self.config.interface_language.clone(), dialog.copied.clone()),
                     move |result| Message::Uninstalled(code.clone(), result),
                 )
             }
@@ -60,7 +60,7 @@ impl Lightforge {
                         // the files straight back.
                         self.queue.retain(|d| d.code != code);
                         if code == self.selected.code {
-                            self.status = format!("uninstalled {label} — freed {}", size_of(freed));
+                            self.status = i18n::text_with_args(&self.config.interface_language, "storage-uninstalled", &[("name", &label), ("size", &size_of(freed))]);
                         }
                         Task::batch([
                             Task::perform(

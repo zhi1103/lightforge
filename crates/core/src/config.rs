@@ -124,6 +124,10 @@ pub struct Config {
     /// The window grows with it, never past what fits the screen.
     #[serde(default = "default_interface_size")]
     pub interface_size: u16,
+    /// Language used by the launcher's interface. The game language above is
+    /// a separate Blizzard setting and does not affect this choice.
+    #[serde(default = "default_interface_language")]
+    pub interface_language: String,
     /// Every product Lightforge manages, official and custom alike.
     pub products: Vec<Product>,
 }
@@ -154,6 +158,10 @@ fn default_backup_keep() -> usize {
 
 fn default_interface_size() -> u16 {
     100
+}
+
+fn default_interface_language() -> String {
+    "en-US".to_owned()
 }
 
 fn default_locale() -> String {
@@ -191,6 +199,7 @@ impl Default for Config {
             update_seen: None,
             backup_keep: default_backup_keep(),
             interface_size: default_interface_size(),
+            interface_language: default_interface_language(),
             products: Vec::new(),
         }
     }
@@ -641,6 +650,19 @@ mod tests {
         assert!(old.battle_net_minimized);
         // And a config from before the switch leaves the client running.
         assert!(!old.close_battle_net_on_play);
+    }
+
+    #[test]
+    fn interface_language_defaults_to_english_and_old_configs_still_load() {
+        let old: Config = toml::from_str("prefix_user = \"steamuser\"\n").unwrap();
+        assert_eq!(old.interface_language, "en-US");
+
+        let chinese = Config {
+            interface_language: "zh-CN".to_owned(),
+            ..Config::default()
+        };
+        let parsed = Config::from_toml(&chinese.to_toml().unwrap()).unwrap();
+        assert_eq!(parsed.interface_language, "zh-CN");
     }
 
     #[test]

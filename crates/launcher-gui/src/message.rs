@@ -332,6 +332,8 @@ pub(crate) enum Message {
     GameLanguage(String),
     /// Whether the launcher gets out of the way once a game is up.
     MinimizeOnLaunch(bool),
+    /// The launcher's interface language, independent of the game language.
+    InterfaceLanguage(String),
     /// An interface size was picked in Settings › General.
     InterfaceSize(InterfaceSizeChoice),
     /// Whether a Battle.net hand-off puts the client in the tray.
@@ -548,6 +550,18 @@ pub(crate) enum Tweak {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProtonChoice(pub(crate) Option<String>, pub(crate) Unpinned);
 
+impl ProtonChoice {
+    pub(crate) fn label(&self, language: &str) -> String {
+        match (&self.0, self.1) {
+            (Some(version), _) if proton::ProtonFlavor::classify(version) == proton::ProtonFlavor::GloriousEggroll => version.clone(),
+            (Some(version), _) => crate::i18n::text_with_args(language, "proton-choice-untested", &[("version", version)]),
+            (None, Unpinned::Newest) => crate::i18n::text(language, "proton-choice-newest-installed"),
+            (None, Unpinned::Default) => crate::i18n::text(language, "proton-choice-follow-default"),
+            (None, Unpinned::BattleNet) => crate::i18n::text(language, "proton-choice-follow-battlenet"),
+        }
+    }
+}
+
 /// What a picker's "no pin of my own" entry falls through to, which it names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Unpinned {
@@ -560,24 +574,6 @@ pub(crate) enum Unpinned {
     /// A title Battle.net opens: unpinned follows Battle.net's pin, which is
     /// the old behaviour and still the sensible one to come back to.
     BattleNet,
-}
-
-impl std::fmt::Display for ProtonChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (&self.0, self.1) {
-            (Some(version), _) => {
-                f.write_str(version)?;
-                // Anything that is not the lineage Lightforge is tested on.
-                match proton::ProtonFlavor::classify(version) == proton::ProtonFlavor::GloriousEggroll {
-                    true => Ok(()),
-                    false => f.write_str(" (untested)"),
-                }
-            }
-            (None, Unpinned::Newest) => f.write_str("Newest installed"),
-            (None, Unpinned::Default) => f.write_str("Follow the default"),
-            (None, Unpinned::BattleNet) => f.write_str("Follow Battle.net"),
-        }
-    }
 }
 
 /// A product in the picker. `ProductCode` has no `Display`, and the label the
@@ -609,13 +605,12 @@ pub(crate) struct BranchChoice {
     pub(crate) configured: bool,
 }
 
-impl std::fmt::Display for BranchChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl BranchChoice {
+    pub(crate) fn label(&self, language: &str) -> String {
         let name = self.name.as_deref().unwrap_or(self.branch.label());
         match self.configured {
-            true => f.write_str(name),
-            // In words: pick_list cannot style one entry.
-            false => write!(f, "{name} — add"),
+            true => name.to_owned(),
+            false => format!("{name} {}", crate::i18n::text(language, "branch-choice-add")),
         }
     }
 }
@@ -624,9 +619,9 @@ impl std::fmt::Display for BranchChoice {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ChannelChoice(pub(crate) Channel);
 
-impl std::fmt::Display for ChannelChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.label())
+impl ChannelChoice {
+    pub(crate) fn label(self, _language: &str) -> String {
+        self.0.label().to_owned()
     }
 }
 
@@ -647,6 +642,15 @@ impl std::fmt::Display for InterfaceSizeChoice {
 pub(crate) struct RowChannel(pub(crate) Option<Channel>);
 
 impl RowChannel {
+    pub(crate) fn label(self, language: &str) -> String {
+        match self.0 {
+            None => crate::i18n::text(language, "addon-channel-default"),
+            Some(channel) => channel.label().to_owned(),
+        }
+    }
+}
+
+impl RowChannel {
     pub(crate) const ALL: [Self; 4] = [
         Self(None),
         Self(Some(Channel::Stable)),
@@ -655,13 +659,20 @@ impl RowChannel {
     ];
 }
 
-impl std::fmt::Display for RowChannel {
+/// A picker's localized presentation around an unchanged message value.
+#[derive(Debug, Clone)]
+pub(crate) struct DisplayChoice<T>(pub(crate) T, pub(crate) String);
+
+impl<T: PartialEq> PartialEq for DisplayChoice<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: Eq> Eq for DisplayChoice<T> {}
+
+impl<T> std::fmt::Display for DisplayChoice<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
-            None => "Default",
-            Some(Channel::Stable) => "Stable",
-            Some(Channel::Beta) => "Beta",
-            Some(Channel::Alpha) => "Alpha",
-        })
+        f.write_str(&self.1)
     }
 }

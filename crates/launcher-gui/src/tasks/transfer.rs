@@ -129,7 +129,7 @@ pub async fn download(
         })
         .map_err(|e| Problem::of(&e))?;
 
-    done_rx.await.map_err(|_| "the download thread stopped unexpectedly".to_owned())?
+    done_rx.await.map_err(|_| crate::i18n::error_marker("transfer-thread-stopped-unexpectedly"))?
 }
 
 /// Write to the log when a running transfer stops moving.
@@ -293,11 +293,11 @@ pub async fn discard_download(
         .await
         .map_err(|e| chain(&e))?;
     let remote = version::for_region(&versions, region, |v| &v.region)
-        .ok_or_else(|| "the version service lists no build for this region".to_owned())?;
+        .ok_or_else(|| crate::i18n::error_marker("transfer-no-build-for-region"))?;
     let cdns = version::cdns(&http, region, code.as_str()).await.map_err(|e| chain(&e))?;
     let cdn = version::for_region(&cdns, region, |c| &c.name)
         .cloned()
-        .ok_or_else(|| "the version service lists no CDN for this region".to_owned())?;
+        .ok_or_else(|| crate::i18n::error_marker("transfer-no-cdn-for-region"))?;
 
     let departing = reclaim::Build::remote(code, remote.build_config.clone(), cdn);
     let reclaim = reclaim::plan(&http, &install, &departing).await.map_err(|e| chain(&e))?;

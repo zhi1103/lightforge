@@ -68,7 +68,7 @@ pub async fn run(
                 Err(_) => Prepared::NoTerminal { command: format!("sh {}", script.display()) },
             })
         }
-        _ => Err("this copy of Lightforge is not one it can update itself".into()),
+        _ => Err(crate::i18n::error_marker("upgrade-copy-cannot-update-itself").into()),
     }
 }
 

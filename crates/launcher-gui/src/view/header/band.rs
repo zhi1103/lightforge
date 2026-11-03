@@ -67,7 +67,7 @@ impl Lightforge {
                 .width(Length::Fixed(theme::tile()))
                 .height(Length::Fixed(theme::tile()))
                 .into(),
-            None => container(text(self.name_of(line)).size(theme::LABEL))
+            None => container(text(self.tile_title(line)).size(theme::LABEL))
                 .center_x(Length::Shrink)
                 .center_y(Length::Fixed(theme::tile()))
                 .into(),
@@ -110,12 +110,26 @@ impl Lightforge {
         }
         tooltip(
             tile,
-            container(text(self.name_of(line)).size(theme::LABEL))
+            container(text(self.tile_title(line)).size(theme::LABEL))
                 .padding([theme::XS, theme::SM])
                 .style(theme::floating),
             tooltip::Position::Bottom,
         )
         .into()
+    }
+
+    /// Translate the tooltip only while the configured name still matches
+    /// the manifest's built-in label (or a seeded default config label).
+    fn tile_title(&self, line: &ProductLine) -> String {
+        let code = line.head();
+        let label = self.name_of(line);
+        let manifest_label = self.catalog.get(&code).map(|entry| entry.label.as_str());
+        i18n::product_title_if_default(
+            &self.config.interface_language,
+            code.as_str(),
+            &label,
+            manifest_label,
+        )
     }
 
     /// A tile's right-click menu.
@@ -128,7 +142,7 @@ impl Lightforge {
                 .width(Length::Fixed(MENU_GLYPH))
                 .height(Length::Fixed(MENU_GLYPH))
                 .opacity(if elsewhere { 1.0_f32 } else { 0.4_f32 }),
-            text("Remove from list").size(theme::BODY).color_maybe((!elsewhere).then_some(theme::MUTED)),
+            text(i18n::text(&self.config.interface_language, "header-remove-from-list")).size(theme::BODY).color_maybe((!elsewhere).then_some(theme::MUTED)),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center);
@@ -193,10 +207,11 @@ impl Lightforge {
                         .height(Length::Fixed(BAND_GLYPH)),
                     Message::ToggleStrip,
                     self.strip_open,
-                    format!("{} more game{}", hidden.len(), match hidden.len() {
-                        1 => "",
-                        _ => "s",
-                    }),
+                    i18n::text_with_args(
+                        &self.config.interface_language,
+                        "header-more-games",
+                        &[("count", &hidden.len().to_string())],
+                    ),
                 ),
             );
             // Under its button, not in the corner.
@@ -218,7 +233,7 @@ impl Lightforge {
                             .height(Length::Fixed(BAND_GLYPH)),
                         Message::ToggleBrowse,
                         self.browse_open,
-                        "All Games".to_owned(),
+                        i18n::text(&self.config.interface_language, "header-all-games"),
                     ),
                 ),
                 // The popover absorbs clicks inside the panel itself, so no
@@ -278,8 +293,8 @@ impl Lightforge {
                     .on_press_maybe(press),
                 container(
                     text(match self.client_up {
-                        true => "Battle.net is running",
-                        false => "Open Battle.net for other Blizzard titles",
+                        true => i18n::text(&self.config.interface_language, "header-battlenet-running"),
+                        false => i18n::text(&self.config.interface_language, "header-battlenet-open-hint"),
                     })
                     .size(theme::LABEL),
                 )

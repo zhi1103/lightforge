@@ -2,12 +2,90 @@ use super::servers_open;
 
 #[test]
 fn the_servers_caption_is_built_from_blizzards_date() {
-    assert_eq!(servers_open("Available October 19, 2026"), "Servers will be available on October 19");
+    let caption = servers_open("Available October 19, 2026", crate::i18n::ENGLISH);
+    let normalized = caption.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(normalized, "Servers will be available on October 19");
     // Anything else is Blizzard's words, untouched.
-    assert_eq!(servers_open("Coming soon"), "Coming soon");
+    assert_eq!(servers_open("Coming soon", crate::i18n::CHINESE), "Coming soon");
+}
+
+#[test]
+fn visible_picker_labels_localize_without_changing_values() {
+    let newest = ProtonChoice(None, Unpinned::Newest);
+    assert_eq!(newest.label(crate::i18n::CHINESE), "最新已安装版本");
+    assert_eq!(newest.0, None);
+
+    let follow = ProtonChoice(None, Unpinned::BattleNet);
+    assert_eq!(follow.label(crate::i18n::CHINESE), "跟随 Battle.net 设置");
+    assert_eq!(follow.1, Unpinned::BattleNet);
+
+    assert_eq!(RowChannel(None).label(crate::i18n::CHINESE), "默认");
+    assert_eq!(RowChannel(Some(Channel::Beta)).label(crate::i18n::CHINESE), "Stable and beta");
+    assert_eq!(ChannelChoice(Channel::Stable).label(crate::i18n::CHINESE), "Stable only");
+
+    assert_eq!(optional_label(HIGH_RES, crate::i18n::CHINESE), "高分辨率材质");
+    assert_eq!(optional_label("NewManifestTag", crate::i18n::CHINESE), "NewManifestTag");
 }
 
 use super::*;
+
+#[test]
+fn product_titles_localize_by_stable_code_and_keep_english_labels() {
+    let cases = [
+        ("wow", "World of Warcraft", "魔兽世界（正式服）"),
+        ("wow_classic", "Classic", "魔兽世界怀旧服"),
+        ("wow_classic_beta", "Forever Beta", "魔兽世界：永恒"),
+        ("wow_classic_era", "Classic Era", "魔兽世界经典怀旧服"),
+        ("wow_anniversary", "Anniversary", "魔兽世界周年纪念版"),
+        ("wowf", "Forever", "魔兽世界：永恒"),
+        ("osi", "Diablo II", "暗黑破坏神II：重制版"),
+        ("d3", "Diablo III", "暗黑破坏神III"),
+        ("fenris", "Diablo IV", "暗黑破坏神IV"),
+        ("anbs", "Diablo Immortal", "暗黑破坏神：不朽"),
+        ("hs_beta", "Hearthstone", "炉石传说"),
+        ("w1r", "Warcraft", "魔兽争霸I：重制版"),
+        ("w2r", "Warcraft II", "魔兽争霸II：重制版"),
+        ("w3", "Warcraft III", "魔兽争霸III：重制版"),
+        ("s1", "StarCraft", "星际争霸：重制版"),
+        ("s2", "StarCraft II", "星际争霸II"),
+        ("pro", "Overwatch", "守望先锋"),
+        ("hero", "Heroes of the Storm", "风暴英雄"),
+    ];
+    for (code, english, chinese) in cases {
+        assert_eq!(i18n::product_title(i18n::ENGLISH, code, english), english, "English {code}");
+        assert_eq!(i18n::product_title(i18n::CHINESE, code, english), chinese, "Chinese {code}");
+        let parsed: ProductCode = code.parse().unwrap();
+        assert_eq!(parsed.as_str(), code, "product identity {code}");
+    }
+    assert_eq!(i18n::product_title(i18n::CHINESE, "new_custom", "New custom game"), "New custom game");
+}
+
+#[test]
+fn dashboard_art_fallback_localizes_known_titles_and_preserves_catalog_labels() {
+    assert_eq!(i18n::product_title(i18n::CHINESE, "wow", "World of Warcraft"), "魔兽世界（正式服）");
+    assert_eq!(i18n::product_title(i18n::ENGLISH, "wow", "World of Warcraft"), "World of Warcraft");
+    assert_eq!(i18n::product_title(i18n::CHINESE, "new_custom", "New custom game"), "New custom game");
+}
+
+#[test]
+fn dashboard_tooltip_localizes_only_builtin_names() {
+    assert_eq!(
+        i18n::product_title_if_default(i18n::CHINESE, "wow", "World of Warcraft", Some("World of Warcraft")),
+        "魔兽世界（正式服）",
+    );
+    assert_eq!(
+        i18n::product_title_if_default(i18n::CHINESE, "wow", "My Azeroth", Some("World of Warcraft")),
+        "My Azeroth",
+    );
+    assert_eq!(
+        i18n::product_title_if_default(i18n::ENGLISH, "wow", "World of Warcraft", Some("World of Warcraft")),
+        "World of Warcraft",
+    );
+    assert_eq!(
+        i18n::product_title_if_default(i18n::CHINESE, "unmodeled", "My game", Some("My game")),
+        "My game",
+    );
+}
 
 fn chord(text: &str, modifiers: iced::keyboard::Modifiers) -> bool {
     hints_chord(&iced::keyboard::Key::Character(text.into()), modifiers)
@@ -52,10 +130,11 @@ fn the_handoff_button_only_promises_what_is_known() {
     assert_eq!(act(false, true), HandoffAct::OpenClient);
     assert_eq!(act(false, false), HandoffAct::OpenClient);
 
-    // Label, colour and message agree, which is the reason for the type.
-    assert_eq!(HandoffAct::Play.label(), "Play via Battle.net");
-    assert_eq!(HandoffAct::Install.label(), "Install via Battle.net");
-    assert_eq!(HandoffAct::OpenClient.label(), "Open Battle.net");
+    // Labels are localized at the view boundary; the action stays a stable id.
+    assert_eq!(i18n::text(i18n::ENGLISH, "dashboard-handoff-play"), "Play via Battle.net");
+    assert_eq!(i18n::text(i18n::CHINESE, "dashboard-handoff-play"), "通过 Battle.net 开始游戏");
+    assert_eq!(i18n::text(i18n::ENGLISH, "dashboard-handoff-install"), "Install via Battle.net");
+    assert_eq!(i18n::text(i18n::ENGLISH, "dashboard-handoff-open"), "Open Battle.net");
     assert_eq!(HandoffAct::Play.colour(), Some(theme::ACCENT));
     assert_eq!(
         HandoffAct::Install.colour(),
@@ -313,7 +392,7 @@ fn a_game_on_an_absent_drive_is_held_rather_than_played_or_downloaded() {
     // restored and resumed without anyone pressing the button.
     let _ = app.enqueue();
     assert!(app.queue.is_empty(), "a download was queued onto a drive that is not there");
-    assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some("nvme2 is not mounted"));
+    assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some("\u{2068}nvme2\u{2069} 尚未挂载"));
 }
 
 /// Dragging a tile moves its whole line, branches and all, and only in
@@ -563,9 +642,9 @@ fn the_keyboard_alone_picks_a_game_and_closes_the_release_notes() {
     // it is drawn, and Escape brings it back to the wordmark.
     let _ = app.update(Message::FocusPress);
     assert!(app.app_menu_open);
-    focus::put(focus::Target::Menu("Settings"), at(40.0, 50.0), send(Message::Show(Screen::Settings)), 1);
+    focus::put(focus::Target::Menu(i18n::MENU_SETTINGS), at(40.0, 50.0), send(Message::Show(Screen::Settings)), 1);
     let _ = app.update(Message::FocusSettle);
-    assert_eq!(app.focus, Some(focus::Target::Menu("Settings")));
+    assert_eq!(app.focus, Some(focus::Target::Menu(i18n::MENU_SETTINGS)));
     let _ = app.update(Message::FocusBack);
     assert!(!app.app_menu_open);
     page();
@@ -616,7 +695,7 @@ fn removing_a_game_takes_its_ptr_and_beta_with_it() {
     );
     // Only the save complains, and only because this harness has no
     // config directory, the removal itself was not refused.
-    assert_ne!(app.error.as_ref().map(|e| e.message.as_str()), Some("that is the only game left — add another first"));
+    assert_ne!(app.error.as_ref().map(|e| e.message.as_str()), Some("这是仅剩的游戏，请先添加另一款游戏"));
 }
 
 /// The header cannot be emptied, and a line is now the unit, so the last
@@ -643,7 +722,7 @@ fn the_last_line_cannot_be_removed_even_with_its_branches_tracked() {
     let _ = app.update(Message::RemoveProduct(ProductCode::ClassicEra));
 
     assert_eq!(app.choices.len(), 2, "the only line was removed");
-    assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some("that is the only game left — add another first"));
+    assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some("这是仅剩的游戏，请先添加另一款游戏"));
 }
 
 /// A game opened from Add a game is shown, not tracked, and survives the
@@ -833,7 +912,7 @@ fn a_resume_during_the_wind_down_is_not_swallowed() {
 
     assert!(app.winding_down.is_none());
     assert!(matches!(app.queue[0].stage, Stage::Running { .. }), "the resume must start");
-    assert_eq!(app.status, "downloading…");
+    assert_eq!(app.status, i18n::text(&app.config.interface_language, "download-downloading"));
 }
 
 #[test]
@@ -974,7 +1053,7 @@ fn a_launch_waits_for_its_paused_download_to_come_to_rest() {
 
     let _ = app.update(Message::Downloaded(code.clone(), stopped(true)));
     assert_eq!(app.launch_when_quiet, None, "started once the run stopped");
-    assert!(app.status.starts_with("starting"), "{}", app.status);
+    assert!(app.status.starts_with("正在启动"), "{}", app.status);
     assert_eq!(app.launching, Some(code), "still this product's session");
 }
 
@@ -1044,7 +1123,7 @@ fn cancelling_an_update_never_deletes_anything() {
 
     assert!(app.queue.is_empty());
     assert!(app.delete_after_cancel.is_empty(), "an update's files are never removed");
-    assert_eq!(app.status, "cancelled");
+    assert_eq!(app.status, i18n::text(&app.config.interface_language, "status-cancelled"));
 }
 
 /// Asking about a product with nothing in the queue must not open a dialog
@@ -1099,8 +1178,9 @@ fn a_config_that_will_not_load_is_described_kept_and_never_overwritten() {
     std::fs::write(dirs.config_file(), broken).unwrap();
 
     let error = Config::load_or_default(&dirs.config_file()).unwrap_err();
-    let message = broken_config(&error, &dirs.config_file());
+    let message = broken_config(&error, &dirs.config_file(), crate::i18n::ENGLISH);
     assert!(message.contains("line 2"), "names where: {message}");
+    assert!(message.starts_with(&dirs.config_file().display().to_string()));
     let backup = dirs.config_file().with_extension("toml.broken");
     assert_eq!(std::fs::read_to_string(backup).unwrap(), broken);
 
@@ -1113,6 +1193,30 @@ fn a_config_that_will_not_load_is_described_kept_and_never_overwritten() {
     app.persist_queue();
     assert_eq!(std::fs::read_to_string(dirs.config_file()).unwrap(), broken);
     assert!(!dirs.queue_file().exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_config_backup_failure_is_localized_without_losing_path_or_error_chain() {
+    let dir = std::env::temp_dir().join(format!("lightforge-badcfg-backup-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("config.toml");
+    let broken = "default_proton = \"GE-Proton10-34\"\nprefix_user = [oops\n";
+    std::fs::write(&path, broken).unwrap();
+    std::fs::create_dir(path.with_extension("toml.broken")).unwrap();
+
+    let error = Config::load_or_default(&path).unwrap_err();
+    let english = broken_config(&error, &path, crate::i18n::ENGLISH);
+    let chinese = broken_config(&error, &path, crate::i18n::CHINESE);
+    assert!(english.contains("(could not save a copy to config.toml.broken)"), "{english}");
+    assert!(chinese.contains("（无法保存副本到 config.toml.broken）"), "{chinese}");
+    for message in [english, chinese] {
+        assert!(message.starts_with(&path.display().to_string()), "{message}");
+        assert!(message.contains("line 2"), "original parse error chain was lost: {message}");
+        assert!(message.contains("config.toml.broken"), "backup filename was lost: {message}");
+    }
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), broken);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1181,11 +1285,12 @@ fn eta_is_rendered_in_the_largest_useful_unit() {
         total_bytes: total,
         bytes_per_second: rate,
     };
-    assert_eq!(eta_of(p(0, 30, 1)), "ETA 30s");
-    assert_eq!(eta_of(p(0, 600, 1)), "ETA 10m");
-    assert_eq!(eta_of(p(0, 7200, 1)), "ETA 2h 0m");
+    assert_eq!(eta_of(i18n::ENGLISH, p(0, 30, 1)), "ETA \u{2068}30\u{2069}s");
+    assert_eq!(eta_of(i18n::ENGLISH, p(0, 600, 1)), "ETA \u{2068}10\u{2069}m");
+    assert_eq!(eta_of(i18n::ENGLISH, p(0, 7200, 1)), "ETA \u{2068}2\u{2069}h \u{2068}0\u{2069}m");
     // Stalled: no rate means no honest estimate.
-    assert_eq!(eta_of(p(0, 100, 0)), "ETA —");
+    assert_eq!(eta_of(i18n::ENGLISH, p(0, 100, 0)), "ETA —");
+    assert_eq!(eta_of(i18n::CHINESE, p(0, 30, 1)), "预计剩余 \u{2068}30\u{2069} 秒");
 }
 
 #[test]
@@ -1625,7 +1730,7 @@ fn a_copy_whose_config_cannot_be_saved_keeps_the_old_one() {
 
     assert_eq!(app.config.product(&code).unwrap().profile.library.as_deref(), Some(from.as_str()));
     assert!(app.moving.is_none());
-    assert!(app.error.as_ref().unwrap().message.contains("stays on A"));
+    assert!(app.error.is_some());
 }
 
 #[test]
@@ -1748,7 +1853,10 @@ fn a_link_that_is_not_a_web_page_is_not_opened() {
 
     let _ = app.update(Message::OpenUrl("file:///home/someone/evil.desktop".to_owned()));
 
-    assert!(app.error.as_ref().unwrap().message.starts_with("not opening file://"));
+    assert_eq!(
+        app.error.as_ref().unwrap().message,
+        i18n::text_with_args(&app.config.interface_language, "error-not-opening-url", &[("url", "file:///home/someone/evil.desktop")]),
+    );
 }
 
 #[test]

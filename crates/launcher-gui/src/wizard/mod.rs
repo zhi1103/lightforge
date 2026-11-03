@@ -55,14 +55,14 @@ impl Step {
     pub const ALL: [Step; 6] =
         [Step::Welcome, Step::Place, Step::Found, Step::Install, Step::Games, Step::Done];
 
-    fn title(self) -> &'static str {
+    fn title(self, language: &str) -> String {
         match self {
-            Self::Welcome => "Welcome to Lightforge",
-            Self::Place => "Where things go",
-            Self::Found => "Discover installed Battle.net games",
-            Self::Install => "Setting up",
-            Self::Games => "Your games",
-            Self::Done => "Ready to play",
+            Self::Welcome => crate::i18n::text(language, "wizard-title-welcome"),
+            Self::Place => crate::i18n::text(language, "wizard-title-place"),
+            Self::Found => crate::i18n::text(language, "wizard-title-found"),
+            Self::Install => crate::i18n::text(language, "wizard-title-install"),
+            Self::Games => crate::i18n::text(language, "wizard-title-games"),
+            Self::Done => crate::i18n::text(language, "wizard-title-done"),
         }
     }
 

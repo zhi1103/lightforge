@@ -30,6 +30,7 @@ mod wizard;
 
 mod format;
 mod icons;
+mod i18n;
 mod message;
 mod model;
 

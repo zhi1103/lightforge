@@ -8,31 +8,32 @@ impl Lightforge {
     ///
     /// Rows shaped as in Settings; sections scroll under a fixed title.
     pub(crate) fn game_settings_card<'a>(&'a self, settings: &'a GameSettings) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         // The figure is [`WINDOW_MIN`]'s height less the title, the footer and
         // the padding.
         const SECTIONS_MAX: f32 = 560.0;
 
         let sections = column![
-            section("Performance", self.performance_group()),
-            section("Graphics", self.graphics_group(settings)),
-            section("Environment", self.environment_group(Scope::Product)),
-            section("Game", self.game_group(settings)),
-            section("Proton", self.proton_group(settings)),
-            section("Addons", self.addons_group()),
-            section("Backups", self.backups_group(settings)),
+            section(i18n::text(language, "game-settings-performance"), self.performance_group()),
+            section(i18n::text(language, "game-settings-graphics"), self.graphics_group(settings)),
+            section(i18n::text(language, "game-settings-environment"), self.environment_group(Scope::Product)),
+            section(i18n::text(language, "game-settings-game"), self.game_group(settings)),
+            section(i18n::text(language, "settings-proton-proton"), self.proton_group(settings)),
+            section(i18n::text(language, "settings-nav-addons"), self.addons_group()),
+            section(i18n::text(language, "game-settings-backups"), self.backups_group(settings)),
         ]
         .spacing(theme::LG);
 
         let actions = row![
             Space::new().width(Length::Fill),
-            secondary("Close", Message::CloseGameSettings).enabled(true),
+            secondary(&i18n::text(language, "common-close"), Message::CloseGameSettings).enabled(true),
         ]
         .align_y(Alignment::Center);
 
         container(
             column![
                 column![
-                    text("Game Settings").size(theme::TITLE),
+                    text(i18n::text(language, "menu-game-settings")).size(theme::TITLE),
                     muted(settings.label.clone(), theme::LABEL),
                 ]
                 .spacing(theme::XS),
@@ -80,21 +81,19 @@ impl Lightforge {
 
     /// CPU profile and overlay, the two things a launch wraps the game in.
     fn performance_group(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let tweaks = self.tweaks();
         let tools = &self.tools;
         let scope = Scope::Product;
 
         setting_group([
             setting(
-                "CPU performance profile",
+                i18n::text(language, "settings-battlenet-cpu-title"),
                 match tools.game_performance {
-                    Some(_) => "Holds the CPU on its performance profile while the game runs.",
-                    None => "Needs CachyOS' game-performance, which is not installed.",
+                    Some(_) => i18n::text(language, "game-settings-cpu-about"),
+                    None => i18n::text(language, "settings-battlenet-cpu-missing"),
                 },
-                self.hint(
-                    "game-performance is a small script that sets the CPU's performance \
-                     profile for as long as the game runs. On by default wherever it is found.",
-                ),
+                self.hint(i18n::text(language, "game-settings-cpu-hint")),
                 self.tool_switch(
                     "game performance",
                     tools.game_performance.is_some(),
@@ -104,10 +103,10 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "MangoHud overlay",
+                i18n::text(language, "settings-battlenet-mangohud-title"),
                 match tools.mangohud {
-                    Some(_) => "Frame rate and frame times drawn over the game.",
-                    None => "Needs MangoHud, which is not installed.",
+                    Some(_) => i18n::text(language, "settings-battlenet-mangohud-about"),
+                    None => i18n::text(language, "settings-battlenet-mangohud-missing"),
                 },
                 None,
                 self.tool_switch(
@@ -119,23 +118,24 @@ impl Lightforge {
                 ),
             ),
             setting(
-                "Shader cache",
-                "Compiled shaders kept for this game. Clear it after changing Proton.",
+                i18n::text(language, "game-settings-shader-cache"),
+                i18n::text(language, "game-settings-shader-cache-about"),
                 None,
-                secondary("Clear", Message::ClearShaderCache).enabled(true),
+                secondary(&i18n::text(language, "common-clear"), Message::ClearShaderCache).enabled(true),
             ),
         ])
     }
 
     /// How the game reaches the screen.
     fn graphics_group<'a>(&'a self, settings: &'a GameSettings) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let tweaks = self.tweaks();
         let scope = Scope::Product;
 
         let mut rows = vec![setting(
-            "Wayland backend",
-            wayland_about(&self.tools),
-            self.hint("Newer and less travelled than the X11 path, so it is off until asked for."),
+            i18n::text(language, "settings-battlenet-wayland-title"),
+            wayland_about(&self.tools, language),
+            self.hint(i18n::text(language, "settings-battlenet-wayland-hint")),
             self.tool_switch(
                 "wayland",
                 self.tools.wayland,
@@ -146,20 +146,17 @@ impl Lightforge {
         )];
         if self.tools.hybrid {
             rows.push(setting(
-                "Run on the NVIDIA GPU",
-                "Renders on the NVIDIA card instead of the integrated one.",
-                self.hint("Through the driver's PRIME render offload. Faster, and uses more power."),
+                i18n::text(language, "game-settings-nvidia-gpu"),
+                i18n::text(language, "game-settings-nvidia-gpu-about"),
+                self.hint(i18n::text(language, "game-settings-nvidia-gpu-hint")),
                 self.tool_switch("nvidia gpu", true, tweaks.nvidia_gpu, scope, Tweak::NvidiaGpu),
             ));
         }
         if self.tools.nvidia.is_some() {
             rows.push(setting(
-                "NVIDIA features",
-                "Reflex and other NVIDIA-only options, through DXVK-NVAPI.",
-                self.hint(
-                    "Proton reports an NVIDIA card as an AMD one unless this is on, so games \
-                     leave their NVIDIA-only options out.",
-                ),
+                i18n::text(language, "game-settings-nvidia-features"),
+                i18n::text(language, "game-settings-nvidia-features-about"),
+                self.hint(i18n::text(language, "game-settings-nvidia-features-hint")),
                 self.tool_switch("nvapi", true, tweaks.nvapi, scope, Tweak::Nvapi),
             ));
         }
@@ -172,16 +169,10 @@ impl Lightforge {
                 TexturesStep::Planning | TexturesStep::Removing
             );
             let about = match (&settings.textures, on) {
-                (TexturesStep::Planning, _) => "Working out what can be deleted…".to_owned(),
-                (TexturesStep::Removing, _) => {
-                    "Deleting the textures. This rewrites game archives and takes a minute."
-                        .to_owned()
-                }
-                (_, true) => format!("Downloaded and kept up to date, {}.", size_of(bytes)),
-                (_, false) => format!(
-                    "Sharper textures, {}. Switching on starts the download.",
-                    size_of(bytes)
-                ),
+                (TexturesStep::Planning, _) => i18n::text(language, "game-settings-textures-planning"),
+                (TexturesStep::Removing, _) => i18n::text(language, "game-settings-textures-removing"),
+                (_, true) => i18n::text_with_args(language, "game-settings-textures-downloaded", &[("size", &size_of(bytes))]),
+                (_, false) => i18n::text_with_args(language, "game-settings-textures-optional", &[("size", &size_of(bytes))]),
             };
             let switch: Element<'a, Message> = match working || self.locked() {
                 true => iced::widget::toggler(on)
@@ -196,20 +187,17 @@ impl Lightforge {
                         .style(theme::switch),
                 ),
             };
-            rows.push(setting(optional_label(HIGH_RES), about, None, switch));
+            rows.push(setting(optional_label(HIGH_RES, language), about, None, switch));
 
             // The question, in the group it belongs to, once it is asked.
             if let TexturesStep::Ask(plan) = &settings.textures {
                 rows.push(setting(
-                    "Delete the texture files too?",
-                    format!(
-                        "Switched off. Deleting them frees {} and leaves everything else alone.",
-                        size_of(plan.freed)
-                    ),
+                    i18n::text(language, "game-settings-delete-textures-question"),
+                    i18n::text_with_args(language, "game-settings-delete-textures-about", &[("size", &size_of(plan.freed))]),
                     None,
                     row![
-                        secondary("Keep them", Message::KeepOptional).enabled(true),
-                        action_button("Delete", theme::ERROR, Message::RemoveOptional)
+                        secondary(&i18n::text(language, "game-settings-keep-textures"), Message::KeepOptional).enabled(true),
+                        action_button(&i18n::text(language, "common-delete"), theme::ERROR, Message::RemoveOptional)
                             .enabled(!self.locked()),
                     ]
                     .spacing(theme::SM),
@@ -222,6 +210,7 @@ impl Lightforge {
 
     /// The environment-variable editor of one scope, with what is wrong in it.
     pub(crate) fn environment_group(&self, scope: Scope) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let content = match scope {
             Scope::Product => &self.env_editor,
             Scope::BattleNet => &self.bnet_env_editor,
@@ -233,7 +222,7 @@ impl Lightforge {
         let (_, bad) = lightforge_core::tweaks::parse_env(&content.text());
 
         let mut body = column![
-            muted("Extra environment variables for the launch, one KEY=value per line.".to_owned(), theme::LABEL),
+            muted(i18n::text(language, "game-settings-environment-about"), theme::LABEL),
             clickable(
                 key,
                 text_editor(content)
@@ -250,16 +239,13 @@ impl Lightforge {
         if !bad.is_empty() {
             let lines: Vec<String> = bad.iter().map(ToString::to_string).collect();
             body = body.push(
-                text(format!("Not used: {}", lines.join(", ")))
+                text(i18n::text_with_args(language, "game-settings-environment-not-used", &[("variables", &lines.join(", "))]))
                     .size(theme::LABEL)
                     .color(theme::ERROR),
             );
         }
         body = body.extend(
-            self.hint(
-                "Applied last, so a line here wins over the switches above. Lines starting \
-                 with # are ignored.",
-            )
+            self.hint(i18n::text(language, "game-settings-environment-hint"))
             .map(Element::from),
         );
 
@@ -268,6 +254,7 @@ impl Lightforge {
 
     /// Where the game lives, and what can be done to the files there.
     fn game_group<'a>(&'a self, settings: &'a GameSettings) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let can = self.can_maintain();
         let dir = self.layout.product_dir(&settings.code);
         let shown = match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
@@ -280,30 +267,30 @@ impl Lightforge {
 
         let mut rows = vec![
             setting(
-                "Location",
+                i18n::text(language, "game-settings-location"),
                 shown,
                 None,
-                secondary("Show in Explorer", Message::OpenFiles).enabled(true),
+                secondary(&i18n::text(language, "menu-show-in-explorer"), Message::OpenFiles).enabled(true),
             ),
             self.drive_row(settings, can.move_game),
         ];
         rows.extend(self.leftover_rows(settings, can.move_game));
         rows.extend([
             setting(
-                "Game files",
-                "Check them against the build and fetch what is damaged.",
+                i18n::text(language, "game-settings-game-files"),
+                i18n::text(language, "game-settings-game-files-about"),
                 None,
                 row![
                     match self.deep_cancel.is_some() {
-                        true => secondary("Stop Deep Scan", Message::DeepScan).enabled(true),
+                        true => secondary(&i18n::text(language, "game-settings-stop-deep-scan"), Message::DeepScan).enabled(true),
                         false => secondary(
-                            "Deep Scan",
+                            &i18n::text(language, "game-settings-deep-scan"),
                             Message::FromGameSettings(Box::new(Message::DeepScan)),
                         )
                         .enabled(can.deep_scan),
                     },
                     secondary(
-                        "Scan & Repair",
+                        &i18n::text(language, "game-settings-scan-repair"),
                         Message::FromGameSettings(Box::new(Message::ScanAndRepair)),
                     )
                     .enabled(can.scan),
@@ -311,20 +298,20 @@ impl Lightforge {
                 .spacing(theme::SM),
             ),
             setting(
-                "Cache",
+                i18n::text(language, "game-settings-cache"),
                 match settings.cache_cleared {
-                    true => "Cleared. The game rebuilds it on its next start.",
-                    false => "Data the game keeps between sessions. Clearing it fixes many display and addon errors.",
+                    true => i18n::text(language, "game-settings-cache-cleared"),
+                    false => i18n::text(language, "game-settings-cache-about"),
                 },
                 None,
-                secondary("Clear Cache", Message::ClearGameCache).enabled(!settings.cache_cleared && !self.in_play()),
+                secondary(&i18n::text(language, "game-settings-clear-cache"), Message::ClearGameCache).enabled(!settings.cache_cleared && !self.in_play()),
             ),
             setting(
-                "Remove from this computer",
-                "Deletes the game's files. Your settings stay in the backups.",
+                i18n::text(language, "game-settings-remove-from-computer"),
+                i18n::text(language, "game-settings-uninstall-about"),
                 None,
                 action_button(
-                    "Uninstall",
+                    &i18n::text(language, "common-uninstall"),
                     theme::ERROR,
                     Message::FromGameSettings(Box::new(Message::AskUninstall)),
                 )
@@ -337,6 +324,7 @@ impl Lightforge {
     /// A copy a move left in another library, offered for removal. Hidden
     /// while a move runs: its own last step is what removes it.
     fn leftover_rows<'a>(&'a self, settings: &'a GameSettings, can_remove: bool) -> Vec<Element<'a, Message>> {
+        let language = &self.config.interface_language;
         if self.moving.as_ref().is_some_and(|m| m.code == settings.code) {
             return Vec::new();
         }
@@ -346,17 +334,17 @@ impl Lightforge {
             .map(|library| {
                 let controls = match settings.leftover_confirm.as_deref() == Some(library.id.as_str()) {
                     true => row![
-                        secondary("Cancel", Message::CancelRemoveLeftover).enabled(true),
-                        action_button("Delete", theme::ERROR, Message::RemoveLeftover).enabled(can_remove),
+                        secondary(&i18n::text(language, "common-cancel"), Message::CancelRemoveLeftover).enabled(true),
+                        action_button(&i18n::text(language, "common-delete"), theme::ERROR, Message::RemoveLeftover).enabled(can_remove),
                     ],
                     false => row![
-                        secondary("Remove", Message::AskRemoveLeftover(library.id.clone())).enabled(can_remove),
+                        secondary(&i18n::text(language, i18n::COMMON_REMOVE), Message::AskRemoveLeftover(library.id.clone())).enabled(can_remove),
                     ],
                 };
                 setting(
-                    format!("Old copy on {}", library.label),
-                    "A move could not delete it. The game plays from where it is now.",
-                    self.hint("Its settings and addons are older than the ones in use and go with it."),
+                    i18n::text_with_args(language, "game-settings-old-copy", &[("drive", &library.label)]),
+                    i18n::text(language, "game-settings-old-copy-about"),
+                    self.hint(i18n::text(language, "game-settings-old-copy-hint")),
                     controls.spacing(theme::SM),
                 )
             })
@@ -365,19 +353,20 @@ impl Lightforge {
 
     /// Which library the game is on, and moving it to another one.
     fn drive_row<'a>(&'a self, settings: &'a GameSettings, can_move: bool) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let here = self.layout.library(&settings.code);
         if let Some(moving) = self.moving.as_ref().filter(|m| m.code == settings.code) {
             let progress = moving.progress.lock().map(|p| *p).unwrap_or_default();
             let percent = progress.bytes_done * 100 / progress.bytes_total.max(1);
             let doing = match (moving.releasing, progress.verifying) {
-                (true, _) => format!("Removing the old copy from {}…", moving.from.label),
-                (false, true) => format!("Checking the copy on {}: {percent}%", moving.to.label),
-                (false, false) => format!("Copying to {}: {percent}%", moving.to.label),
+                (true, _) => i18n::text_with_args(language, "game-settings-moving-remove-old", &[("drive", &moving.from.label)]),
+                (false, true) => i18n::text_with_args(language, "game-settings-moving-check", &[("drive", &moving.to.label), ("percent", &percent.to_string())]),
+                (false, false) => i18n::text_with_args(language, "game-settings-moving-copy", &[("drive", &moving.to.label), ("percent", &percent.to_string())]),
             };
-            return setting("Drive", doing, None, secondary("Cancel", Message::CancelMove).enabled(!moving.releasing));
+            return setting(i18n::text(language, "settings-storage-drives"), doing, None, secondary(&i18n::text(language, "common-cancel"), Message::CancelMove).enabled(!moving.releasing));
         }
 
-        let about = here.map_or_else(String::new, |library| format!("On {}.", library.label));
+        let about = here.map_or_else(String::new, |library| i18n::text_with_args(language, "game-settings-on-drive", &[("drive", &library.label)]));
         let targets: Vec<(String, String)> = self
             .config
             .libraries
@@ -386,7 +375,7 @@ impl Lightforge {
             .map(|library| (library.label.clone(), library.id.clone()))
             .collect();
         if targets.is_empty() {
-            return setting("Drive", about, self.hint("Add another drive under Settings › Storage to move the game there."), Space::new());
+            return setting(i18n::text(language, "settings-storage-drives"), about, self.hint(i18n::text(language, "game-settings-add-drive-hint")), Space::new());
         }
         let picked = settings
             .move_to
@@ -398,7 +387,7 @@ impl Lightforge {
             "move to".to_owned(),
             labels,
             picked.clone(),
-            "another drive",
+            i18n::text(language, "game-settings-another-drive").as_str(),
             move |label: String| {
                 let id = targets.iter().find(|(l, _)| *l == label).map(|(_, id)| id.clone()).unwrap_or_default();
                 Message::MoveTargetPicked(id)
@@ -407,10 +396,10 @@ impl Lightforge {
             theme::LABEL,
         );
         setting(
-            "Drive",
+            i18n::text(language, "settings-storage-drives"),
             about,
-            self.hint("Copies the game's files to the other drive, checks every one, then removes the old copy. Nothing is downloaded again."),
-            row![picker, secondary("Move", Message::MoveGame).enabled(can_move && picked.is_some())]
+            self.hint(i18n::text(language, "game-settings-move-hint")),
+            row![picker, secondary(&i18n::text(language, "game-settings-move"), Message::MoveGame).enabled(can_move && picked.is_some())]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center),
         )
@@ -418,32 +407,35 @@ impl Lightforge {
 
     /// The same pin as Settings › Proton, for whoever is here.
     fn proton_group<'a>(&'a self, settings: &'a GameSettings) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let code = &settings.code;
         let unpinned = match Kind::of(code) {
             Kind::Managed => Unpinned::Default,
             Kind::HandOff => Unpinned::BattleNet,
         };
-        let builds: Vec<ProtonChoice> = std::iter::once(ProtonChoice(None, unpinned))
+        let builds: Vec<DisplayChoice<ProtonChoice>> = std::iter::once(ProtonChoice(None, unpinned))
             .chain(
                 self.setup
                     .iter()
                     .flat_map(|s| s.installed.iter())
                     .map(|build| ProtonChoice(Some(build.version.clone()), unpinned)),
             )
+            .map(|choice| DisplayChoice(choice.clone(), choice.label(&self.config.interface_language)))
             .collect();
         let pin = self.config.product(code).and_then(|p| p.profile.proton_ge_version.clone());
+        let current = ProtonChoice(pin, unpinned);
         let for_code = code.clone();
 
         setting_group([setting(
-            "Proton version",
-            "The build this game starts with.",
+            i18n::text(language, "game-settings-proton-version"),
+            i18n::text(language, "game-settings-proton-version-about"),
             None,
             self.picker(
                 "game settings proton".to_owned(),
                 builds,
-                Some(ProtonChoice(pin, unpinned)),
+                Some(DisplayChoice(current.clone(), current.label(language))),
                 "",
-                move |choice| Message::PinProductProton(for_code.clone(), choice),
+                move |choice| Message::PinProductProton(for_code.clone(), choice.0),
                 Length::Fixed(260.0),
                 theme::BODY,
             ),
@@ -452,12 +444,13 @@ impl Lightforge {
 
     /// The way to the page that manages them.
     fn addons_group(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         setting_group([setting(
-            "Installed addons",
-            "Update, pin and remove the addons for this game.",
+            i18n::text(language, "game-settings-installed-addons"),
+            i18n::text(language, "game-settings-addons-about"),
             None,
             secondary(
-                "Manage Addons",
+                &i18n::text(language, "dashboard-manage-addons"),
                 Message::FromGameSettings(Box::new(Message::Show(Screen::Addons))),
             )
             .enabled(true),
@@ -467,18 +460,19 @@ impl Lightforge {
     /// The WTF backups, each restorable or deletable, and the button that
     /// takes one now.
     fn backups_group<'a>(&'a self, settings: &'a GameSettings) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let idle = !settings.working && !self.locked();
 
         let mut rows: Vec<Element<'a, Message>> = vec![setting(
-            "Your in-game settings",
-            "Config.wtf, key bindings and addon data, kept so they can be put back.",
+            i18n::text(language, "game-settings-your-settings"),
+            i18n::text(language, "game-settings-your-settings-about"),
             None,
-            secondary("Back up now", Message::BackupNow).enabled(idle),
+            secondary(&i18n::text(language, "game-settings-backup-now"), Message::BackupNow).enabled(idle),
         )];
 
         match settings.backups.as_deref() {
-            None => rows.push(setting("Reading backups…", "", None, Space::new())),
-            Some([]) => rows.push(setting("No backups yet", "", None, Space::new())),
+            None => rows.push(setting(i18n::text(language, "game-settings-reading-backups"), "", None, Space::new())),
+            Some([]) => rows.push(setting(i18n::text(language, "game-settings-no-backups"), "", None, Space::new())),
             Some(list) => {
                 for backup in list {
                     let asking = settings
@@ -490,12 +484,12 @@ impl Lightforge {
                     // it is asked, so the row only ever holds two buttons.
                     let about = match asking {
                         Some(BackupAction::Restore) if backup.accounts.len() > 1 => {
-                            "Restore every account's settings from this backup, or one account's?".to_owned()
+                            i18n::text(language, "game-settings-restore-accounts-question")
                         }
                         Some(BackupAction::Restore) => {
-                            "Replace the current settings with this backup?".to_owned()
+                            i18n::text(language, "game-settings-restore-question")
                         }
-                        Some(BackupAction::Delete) => "Delete this backup?".to_owned(),
+                        Some(BackupAction::Delete) => i18n::text(language, "game-settings-delete-backup-question"),
                         None => [
                             Some(backup.reason.label().to_owned()),
                             backup.build.clone(),
@@ -508,27 +502,27 @@ impl Lightforge {
                     };
                     let controls = match asking {
                         Some(BackupAction::Restore) if backup.accounts.len() > 1 => row![
-                            secondary("Cancel", Message::CancelRestore).enabled(true),
-                            action_button("All accounts", theme::UPDATE, Message::ConfirmRestore(None))
+                            secondary(&i18n::text(language, "common-cancel"), Message::CancelRestore).enabled(true),
+                            action_button(&i18n::text(language, "game-settings-all-accounts"), theme::UPDATE, Message::ConfirmRestore(None))
                                 .enabled(idle),
                         ]
                         .extend(backup.accounts.iter().map(|name| {
                             secondary(name, Message::ConfirmRestore(Some(name.clone()))).enabled(idle)
                         })),
                         Some(BackupAction::Restore) => row![
-                            secondary("Cancel", Message::CancelRestore).enabled(true),
-                            action_button("Restore", theme::UPDATE, Message::ConfirmRestore(None))
+                            secondary(&i18n::text(language, "common-cancel"), Message::CancelRestore).enabled(true),
+                            action_button(&i18n::text(language, "game-settings-restore"), theme::UPDATE, Message::ConfirmRestore(None))
                                 .enabled(idle),
                         ],
                         Some(BackupAction::Delete) => row![
-                            secondary("Cancel", Message::CancelRestore).enabled(true),
-                            action_button("Delete", theme::ERROR, Message::ConfirmDeleteBackup)
+                            secondary(&i18n::text(language, "common-cancel"), Message::CancelRestore).enabled(true),
+                            action_button(&i18n::text(language, "common-delete"), theme::ERROR, Message::ConfirmDeleteBackup)
                                 .enabled(idle),
                         ],
                         None => row![
-                            secondary("Restore", Message::AskRestore(backup.path.clone()))
+                            secondary(&i18n::text(language, "game-settings-restore"), Message::AskRestore(backup.path.clone()))
                                 .enabled(idle),
-                            secondary("Delete", Message::AskDeleteBackup(backup.path.clone()))
+                            secondary(&i18n::text(language, "common-delete"), Message::AskDeleteBackup(backup.path.clone()))
                                 .enabled(idle),
                         ],
                     }
@@ -551,12 +545,12 @@ impl Lightforge {
 
 /// The Wayland backend row's description, in Game Settings and Settings ›
 /// Battle.net alike.
-pub(crate) fn wayland_about(tools: &HostTools) -> &'static str {
+pub(crate) fn wayland_about(tools: &HostTools, language: &str) -> String {
     match tools.wayland {
-        false => "Only available in a Wayland session.",
+        false => crate::i18n::text(language, "game-settings-wayland-not-available"),
         true if tools.nvidia_lacks_explicit_sync() => {
-            "NVIDIA drivers before 555 lack explicit sync, so expect flicker."
+            crate::i18n::text(language, "game-settings-wayland-nvidia-flicker")
         }
-        true => "Runs on Proton's Wayland backend instead of XWayland.",
+        true => crate::i18n::text(language, "game-settings-wayland-about"),
     }
 }

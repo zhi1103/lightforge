@@ -126,7 +126,8 @@ impl Lightforge {
                 match started {
                     Some(Ok(())) => iced::exit(),
                     Some(Err(e)) => {
-                        self.error = Some(format!("could not start the new Lightforge: {e}").into());
+                        let error = e.to_string();
+                        self.error = Some(crate::i18n::text_with_args(&self.config.interface_language, "error-could-not-start-updated-lightforge", &[("error", error.as_str())]).into());
                         Task::none()
                     }
                     None => iced::exit(),

@@ -111,7 +111,8 @@ fn a_scan_after_setup_does_not_offer_what_is_already_here() {
     let _ = update(&mut app, Msg::Scanned(vec![found]));
 
     let rows = &app.wizard.as_ref().unwrap().rows;
-    let had: Vec<bool> = rows.iter().map(|row| row.blocked.as_deref() == Some("already in Lightforge")).collect();
+    let already = crate::i18n::text(&app.config.interface_language, "wizard-already-in-lightforge");
+    let had: Vec<bool> = rows.iter().map(|row| row.blocked.as_deref() == Some(already.as_str())).collect();
     assert_eq!(had, [true, false, true, false]);
     assert!(rows[1].take && rows[3].take, "what is new is offered ticked");
     let _ = std::fs::remove_dir_all(&root);
@@ -131,7 +132,7 @@ fn a_typed_folder_is_looked_through_once_and_off_the_ui_thread() {
     let _ = update(&mut app, Msg::Pointed(None));
     let wizard = app.wizard.as_ref().unwrap();
     assert!(!wizard.pointing);
-    assert!(wizard.point_error.as_deref().is_some_and(|e| e.starts_with("nothing of Blizzard's")));
+    assert!(wizard.point_error.as_deref().is_some_and(|e| e.starts_with("此处没有暴雪游戏内容")));
 }
 
 /// Opened from Settings, the slide closes on Back, and closing it is not

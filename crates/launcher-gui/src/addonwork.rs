@@ -480,7 +480,7 @@ pub async fn import(
     let collection = Collection::parse(&token).map_err(|e| Problem::of(&e))?;
     let requests = manage::requests_from(&collection);
     if requests.is_empty() {
-        return Err("that token names no addons Lightforge can install".into());
+        return Err(crate::i18n::error_marker("addon-token-empty").into());
     }
     // The newest of each on its channel, never the token's own files: an
     // import pinned to them never updated, with nothing on screen saying why.
@@ -571,7 +571,7 @@ async fn run(
     let options = Options {
         reinstall: mode.reinstall,
         ..options(&layout, &code, mode.pinned, channel)
-            .ok_or("no data directory available")?
+            .ok_or_else(|| crate::i18n::error_marker("addon-data-directory-missing"))?
     };
     let catalog = catalog();
     let http = http.ok_or(crate::tasks::NO_HTTP)?;
@@ -680,7 +680,7 @@ pub async fn adopt(
     channel: Channel,
 ) -> Result<Vec<manage::Adopted>, String> {
     let options =
-        options(&layout, &code, false, channel).ok_or("no data directory available")?;
+        options(&layout, &code, false, channel).ok_or_else(|| crate::i18n::error_marker("addon-data-directory-missing"))?;
     let http = http.ok_or(crate::tasks::NO_HTTP)?;
     manage::adopt(&http, catalog().as_ref(), &options)
         .await
@@ -700,7 +700,7 @@ pub async fn versions(
         return Ok(Vec::new());
     }
     let (Some(http), Some(catalog)) = (http, catalog()) else {
-        return Err("no addon catalog is configured".to_owned());
+        return Err(crate::i18n::error_marker("addon-catalog-missing"));
     };
     catalog
         .files(&http, &id, addons::flavor_of(&code), VERSION_CHOICES)
@@ -732,10 +732,10 @@ pub async fn detail(
     id: String,
 ) -> Result<Detail, String> {
     if addons::Provider::parse(&provider) != addons::Provider::Curse {
-        return Err("only CurseForge addons have a detail page".to_owned());
+        return Err(crate::i18n::error_marker("addon-detail-curseforge-error"));
     }
     let (Some(http), Some(catalog)) = (http, catalog()) else {
-        return Err("no addon catalog is configured".to_owned());
+        return Err(crate::i18n::error_marker("addon-catalog-missing"));
     };
 
     // The project is the only part that must succeed, it carries the name,
@@ -832,7 +832,7 @@ pub async fn reinstall_one(
 pub fn export(layout: &Layout, code: &ProductCode) -> Result<String, String> {
     // Reads the ledger and resolves nothing, so the channel is never consulted.
     let options =
-        options(layout, code, false, Channel::default()).ok_or("no data directory available")?;
+        options(layout, code, false, Channel::default()).ok_or_else(|| crate::i18n::error_marker("addon-data-directory-missing"))?;
     let ledger = Ledger::load(&options.ledger_path).map_err(|e| chain(&e))?;
 
     let collection = addons::Collection {
@@ -861,7 +861,7 @@ pub async fn check_updates(
     channel: Channel,
 ) -> Result<Vec<manage::UpdateStatus>, String> {
     let options =
-        options(&layout, &code, false, channel).ok_or("no data directory available")?;
+        options(&layout, &code, false, channel).ok_or_else(|| crate::i18n::error_marker("addon-data-directory-missing"))?;
     let http = http.ok_or(crate::tasks::NO_HTTP)?;
     manage::check_updates(&http, catalog().as_ref(), &options)
         .await
@@ -878,7 +878,7 @@ pub async fn remove(
     tokio::task::spawn_blocking(move || {
         // Deletes folders the ledger names; resolves nothing.
         let options = options(&layout, &code, false, Channel::default())
-            .ok_or("no data directory available")?;
+            .ok_or_else(|| crate::i18n::error_marker("addon-data-directory-missing"))?;
         manage::remove(&options, &provider, &id).map_err(|e| chain(&e))
     })
     .await

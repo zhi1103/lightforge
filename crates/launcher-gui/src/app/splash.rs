@@ -102,12 +102,12 @@ impl Lightforge {
     pub(crate) fn splash_screen(&self, splash: &Splash) -> Element<'_, Message> {
         const MARK: f32 = 40.0;
         const SPIN: f32 = 30.0;
+        let language = &self.config.interface_language;
         let note = match splash.products {
             // No tracked products at all is a machine that has never been set
             // up, which is a wizard away, not an artwork fetch.
-            0 => "Getting ready…".to_owned(),
-            1 => "Fetching artwork for 1 game…".to_owned(),
-            n => format!("Fetching artwork for {n} games…"),
+            0 => crate::i18n::text(language, "splash-getting-ready"),
+            n => crate::i18n::text_with_args(language, "splash-fetching-artwork", &[("count", &n.to_string())]),
         };
         // `theme::menu`: `floating` would show the desktop through it.
         let card = container(

@@ -83,7 +83,7 @@ impl Lightforge {
         self.remote = None;
         self.bgdl = None;
         self.branding = None;
-        self.status = "checking…".to_owned();
+        self.status = i18n::text(&self.config.interface_language, "status-checking");
         // These are per-product, so they follow the selection instead of
         // carrying Retail's frame cap over to Classic's panel.
         self.load_tweak_inputs();

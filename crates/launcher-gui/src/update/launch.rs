@@ -42,7 +42,7 @@ impl Lightforge {
                         self.refresh_drives();
                         match self.offline_drive(&self.selected.code) {
                             Some(drive) => {
-                                self.status = format!("{drive} is still not mounted");
+                                self.status = i18n::text_with_args(&self.config.interface_language, "settings-doctor-drive-unmounted", &[("drive", &drive)]);
                                 Task::none()
                             }
                             None => {
@@ -95,9 +95,9 @@ impl Lightforge {
                 };
                 session.stopping = true;
                 let game = session.game.clone();
-                self.status = "stopping the game…".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-stopping-the-game").to_owned();
                 let code = dialog.code;
-                Task::perform(tasks::stop_game(self.layout.clone(), game), move |result| {
+                Task::perform(tasks::stop_game(self.layout.clone(), game, self.config.interface_language.clone()), move |result| {
                     Message::GameStopped(code.clone(), result)
                 })
             }
@@ -144,23 +144,19 @@ impl Lightforge {
                     }
                     // Closed while signing in: nothing to hand off to.
                     Ok(tasks::Handoff::ClientClosed) => self.update(Message::Launched(Ok(
-                        "Battle.net was closed before the game could start".to_owned(),
+                        i18n::text(&self.config.interface_language, "launch-battlenet-closed"),
                     ))),
                     Ok(tasks::Handoff::NeedsAttention { minimized }) => {
                         // Waiting on a person (two-factor, an update); left
                         // running, and said where: a minimized client is in the tray.
                         self.update(Message::Launched(Ok(match minimized {
-                            true => "Battle.net needs attention — open it from the tray, \
-                                     finish there and press Play"
-                                .to_owned(),
-                            false => "Battle.net needs attention — finish in its window and \
-                                      press Play there"
-                                .to_owned(),
+                            true => i18n::text(&self.config.interface_language, "launch-battlenet-attention-tray"),
+                            false => i18n::text(&self.config.interface_language, "launch-battlenet-attention-window"),
                         })))
                     }
                     // Signed in, told to launch, and nothing came up.
                     Ok(tasks::Handoff::NothingStarted) => self.update(Message::Launched(Ok(
-                        "Battle.net is open — no game started".to_owned(),
+                        i18n::text(&self.config.interface_language, "launch-battlenet-no-game-started"),
                     ))),
                     Err(e) => self.update(Message::Launched(Err(e))),
                 }
@@ -191,7 +187,7 @@ impl Lightforge {
                 // Paused runs still checkpoint; the client must not open the store yet.
                 if self.launch_must_wait() {
                     self.launch_when_quiet = Some(what);
-                    self.status = "pre-flight… waiting for the download to pause".to_owned();
+                    self.status = i18n::text(&self.config.interface_language, "status-preflight-waiting-for-download").to_owned();
                     return Ok(Task::none());
                 }
                 self.start_launch(what)
@@ -244,6 +240,7 @@ impl Lightforge {
                         self.layout.clone(),
                         self.selected.code.clone(),
                         self.config.prefix_user.clone(),
+                        self.config.interface_language.clone(),
                     ),
                     Message::BattleNetShown,
                 )

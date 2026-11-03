@@ -36,9 +36,10 @@ impl Progress {
 pub async fn install_build(
     version: String,
     tx: tokio::sync::watch::Sender<Progress>,
+    language: String,
 ) -> Result<(), Problem> {
     let dirs = AppDirs::discover().map_err(|e| Problem::of(&e))?;
-    setup::install_build(&dirs, &version, reporter(tx))
+    setup::install_build(&dirs, &version, reporter(tx, language))
         .await
         .map(|_| ())
         .map_err(|e| Problem::of(&e))
@@ -47,7 +48,7 @@ pub async fn install_build(
 /// Turn setup [`Event`]s into [`Progress`] updates on `tx`.
 ///
 /// Shared by [`run`] and [`install_build`].
-fn reporter(tx: tokio::sync::watch::Sender<Progress>) -> impl FnMut(Event) {
+fn reporter(tx: tokio::sync::watch::Sender<Progress>, language: String) -> impl FnMut(Event) {
     let mut progress = Progress::default();
     move |event: Event| {
         match event {
@@ -55,7 +56,13 @@ fn reporter(tx: tokio::sync::watch::Sender<Progress>) -> impl FnMut(Event) {
                 progress.step = Some(step);
                 progress.done = 0;
                 progress.total = None;
-                progress.log.push(format!("{} — {}", step.label(), step.detail()));
+                let label = crate::i18n::setup_step_label(&language, step);
+                let detail = crate::i18n::setup_step_detail(&language, step);
+                progress.log.push(crate::i18n::text_with_args(
+                    &language,
+                    "setup-step-started",
+                    &[("step", &label), ("detail", &detail)],
+                ));
             }
             Event::Progress { done, total } => {
                 progress.done = done;
@@ -65,10 +72,23 @@ fn reporter(tx: tokio::sync::watch::Sender<Progress>) -> impl FnMut(Event) {
                 progress.step = None;
                 progress.done = 0;
                 progress.total = None;
-                progress.log.push(match skipped {
-                    true => format!("{} — already done ({note})", step.label()),
-                    false => format!("{} — {note}", step.label()),
-                });
+                let label = crate::i18n::setup_step_label(&language, step);
+                let note = match (step, skipped, note.as_str()) {
+                    (Step::BattleNet, false, "already present") => crate::i18n::text(&language, "setup-note-already-present"),
+                    (Step::BattleNet, false, note) if note.starts_with("installed in ") && note.ends_with('s') => {
+                        let seconds = note.trim_start_matches("installed in ").trim_end_matches('s');
+                        crate::i18n::text_with_args(&language, "setup-note-installed-in", &[("seconds", seconds)])
+                    }
+                    _ => note,
+                };
+                progress.log.push(crate::i18n::text_with_args(
+                    &language,
+                    match skipped {
+                        true => "setup-step-skipped",
+                        false => "setup-step-finished",
+                    },
+                    &[("step", &label), ("note", &note)],
+                ));
             }
         }
         let _ = tx.send(progress.clone());
@@ -83,7 +103,8 @@ pub async fn run(
     tx: tokio::sync::watch::Sender<Progress>,
 ) -> Result<Status, Problem> {
     let dirs = AppDirs::discover().map_err(|e| Problem::of(&e))?;
-    setup::run(&layout, &dirs, &config, proton_version.as_deref(), reporter(tx))
+    let report = reporter(tx, config.interface_language.clone());
+    setup::run(&layout, &dirs, &config, proton_version.as_deref(), report)
         .await
         .map_err(|e| Problem::of(&e))
 }
@@ -176,13 +197,13 @@ pub async fn measure(builds: Vec<std::path::PathBuf>) -> Vec<(std::path::PathBuf
 }
 
 /// Delete a managed build, refusing anything still pinned.
-pub async fn remove_proton(config: Config, build: ProtonRelease) -> Result<String, String> {
+pub async fn remove_proton(config: Config, build: ProtonRelease, language: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let dirs = AppDirs::discover().map_err(|e| chain(&e))?;
         let pinned_by = config.pinned_to(&build.version);
         lightforge_core::proton::remove_build(&build, &dirs.proton_dir(), &pinned_by)
             .map_err(|e| chain(&e))?;
-        Ok(format!("removed {}", build.version))
+        Ok(crate::i18n::text_with_args(&language, "proton-removed", &[("version", &build.version)]))
     })
     .await
     .map_err(|e| chain(&e))?

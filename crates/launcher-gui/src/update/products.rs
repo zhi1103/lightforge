@@ -51,11 +51,11 @@ impl Lightforge {
                 self.status = match &refreshed.offline {
                     // Rule 2 of the resolver: offline never blocks a launch, so
                     // it is a note, not an error.
-                    Some(_) => "version service unreachable — offline".to_owned(),
+                    Some(_) => i18n::text(&self.config.interface_language, "status-version-service-offline").to_owned(),
                     None => refreshed
                         .remote
                         .as_ref()
-                        .map(|r| format!("latest {}", r.versions_name))
+                        .map(|r| i18n::text_with_args(&self.config.interface_language, "status-latest-version", &[("versions", &r.versions_name)]))
                         .unwrap_or_default(),
                 };
                 Task::none()
@@ -329,8 +329,7 @@ impl Lightforge {
                 // The header cannot be empty: with nothing tracked there is no
                 // product to show and no way back to this panel.
                 if going.len() >= self.choices.len() {
-                    self.error =
-                        Some("that is the only game left — add another first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-only-game-left").into());
                     return Ok(Task::none());
                 }
 

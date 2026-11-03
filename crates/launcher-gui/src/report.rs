@@ -75,6 +75,18 @@ impl Category {
         }
     }
 
+    pub(crate) fn message_id(self) -> &'static str {
+        match self {
+            Self::Game => "report-category-game",
+            Self::Addons => "report-category-addons",
+            Self::Downloader => "report-category-downloader",
+            Self::Settings => "report-category-settings",
+            Self::BattleNet => "report-category-battlenet",
+            Self::Launcher => "report-category-launcher",
+            Self::General => "report-category-general",
+        }
+    }
+
     /// The tag value, stable and lower-case so a GlitchTip search for
     /// `category:addons` keeps working whatever the label becomes.
     pub fn tag(self) -> &'static str {

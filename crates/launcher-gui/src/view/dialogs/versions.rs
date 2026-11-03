@@ -6,9 +6,10 @@ use iced::widget::column;
 impl Lightforge {
     /// The cog's "Game Version": what is installed and where.
     pub(crate) fn version_card_info<'a>(&'a self, dialog: &'a VersionDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let body = column![
-            field_row("Version".to_owned(), mono(dialog.version.clone()).into()),
-            field_row("Install Location".to_owned(), mono(dialog.location.clone()).into()),
+            field_row(i18n::text(language, "settings-about-version"), mono(dialog.version.clone()).into()),
+            field_row(i18n::text(language, "dialog-install-location"), mono(dialog.location.clone()).into()),
         ]
         .spacing(theme::SM);
         let actions = row![
@@ -16,7 +17,7 @@ impl Lightforge {
             tappable(
                 "close version",
                 Some(Message::CloseGameVersion),
-                button(text("Close").size(theme::LABEL).width(Length::Fill).center())
+                button(text(i18n::text(language, "common-close")).size(theme::LABEL).width(Length::Fill).center())
                     .width(Length::Fixed(170.0))
                     .padding(theme::tap([theme::SM, theme::MD]))
                     .style(theme::outlined),
@@ -33,6 +34,7 @@ impl Lightforge {
 
     /// The cog's "Modify Install": the language the game is installed in.
     pub(crate) fn modify_card<'a>(&'a self, dialog: &'a ModifyDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let locales: Vec<LocaleChoice> = lightforge_core::tact::install::LOCALES
             .iter()
             .map(|(code, _)| LocaleChoice(code.to_string()))
@@ -40,9 +42,7 @@ impl Lightforge {
         let changed = dialog.locale != dialog.current;
         let body = column![
             muted(
-                "Downloads the files for the chosen language, and the game starts in it. \
-                 Files already stored are not fetched again."
-                    .to_owned(),
+                i18n::text(language, "dialog-modify-language-about"),
                 theme::LABEL,
             ),
             self.picker(
@@ -51,31 +51,31 @@ impl Lightforge {
                 Some(LocaleChoice(
                     lightforge_core::tact::install::current_locale(&dialog.locale).to_owned(),
                 )),
-                "Language",
+                i18n::text(language, "settings-downloads-game-language-title").as_str(),
                 |choice| Message::ModifyLocale(choice.0),
                 Length::Fixed(300.0),
                 theme::BODY,
             ),
         ]
         .spacing(theme::MD);
-        let choice = |label: &'static str| {
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(170.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
         };
         let actions = row![
             Space::new().width(Length::Fill),
-            tappable("modify cancel", Some(Message::ModifyCancel), choice("Cancel").style(theme::outlined)),
+            tappable("modify cancel", Some(Message::ModifyCancel), choice(i18n::text(language, "common-cancel")).style(theme::outlined)),
             tappable(
                 "modify start",
                 changed.then_some(Message::ModifyStart),
-                choice("Start Update").style(theme::filled(theme::UPDATE)),
+                choice(i18n::text(language, "dialog-start-update")).style(theme::filled(theme::UPDATE)),
             ),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center);
         container(
-            column![section(format!("Modify {}", dialog.label), body.into()), actions]
+            column![section(i18n::text_with_args(language, "dialog-modify-install", &[("game", &dialog.label)]), body.into()), actions]
                 .spacing(theme::LG),
         )
         .width(Length::Fixed(560.0))
@@ -90,29 +90,28 @@ impl Lightforge {
     /// would be undone by the next pass within the minute, which is not a
     /// choice so much as a delay.
     pub(crate) fn version_card<'a>(&'a self, picker: &'a VersionPicker) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let mut body = column![
-            text(format!("Choose a build of {}", picker.name)).size(theme::TITLE),
+            text(i18n::text_with_args(language, "dialog-choose-addon-build", &[("name", &picker.name)])).size(theme::TITLE),
         ]
         .spacing(theme::SM)
         .width(Length::Fixed(560.0));
 
         body = body.extend(
-            self.hint(
-                "Installing a build from here pins the addon to it, so nothing moves it \
-                 again until you unpin. Only CurseForge publishes a build list.",
-            )
+            self.hint(i18n::text(language, "dialog-addon-build-hint"))
             .map(Element::from),
         );
 
         match picker.builds.as_deref() {
-            None => body = body.push(muted("asking the catalogue…".to_owned(), theme::BODY)),
+            None => body = body.push(muted(i18n::text(language, "dialog-asking-catalogue"), theme::BODY)),
             Some([]) => {
+                let headline = picker
+                    .problem
+                    .clone()
+                    .unwrap_or_else(|| i18n::text(language, "dialog-no-build-list"));
                 body = body.push(empty(
-                    match &picker.problem {
-                        Some(e) => e.as_str(),
-                        None => "This provider publishes no build list.",
-                    },
-                    "Only CurseForge offers older builds; the others ship one.",
+                    &headline,
+                    &i18n::text(language, "dialog-only-curseforge-older-builds"),
                 ));
             }
             Some(builds) => {
@@ -138,7 +137,7 @@ impl Lightforge {
                         }
                     }
                     if installed {
-                        head = head.push(pill("installed".to_owned(), theme::MUTED));
+                        head = head.push(pill(i18n::text(language, "common-installed"), theme::MUTED));
                     }
 
                     let mut line = row![column![
@@ -161,7 +160,7 @@ impl Lightforge {
                     line = line.push(Space::new().width(Length::Fill));
                     line = line.push(
                         secondary(
-                            "Pin to this",
+                            &i18n::text(language, "dialog-pin-to-this"),
                             Message::InstallVersion(
                                 picker.provider.clone(),
                                 picker.id.clone(),
@@ -182,7 +181,7 @@ impl Lightforge {
         body = body.push(
             row![
                 Space::new().width(Length::Fill),
-                secondary("Cancel", Message::CancelVersionPicker).enabled(true),
+                secondary(&i18n::text(language, "common-cancel"), Message::CancelVersionPicker).enabled(true),
             ]
             .spacing(theme::SM),
         );

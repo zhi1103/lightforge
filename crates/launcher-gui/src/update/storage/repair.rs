@@ -15,11 +15,12 @@ impl Lightforge {
                 self.gear_open = false;
                 // Rewrites indices: nothing else may write or open the store.
                 if let Some(what) = self.store_writer() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    let what = i18n::maintenance_label(&self.config.interface_language, what);
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", &what)]).into());
                     return Ok(Task::none());
                 }
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 self.error = None;
@@ -27,12 +28,12 @@ impl Lightforge {
                 self.scan_for = Some(self.selected.code.clone());
                 self.busy = true;
                 self.scan_sample = Default::default();
-                self.status = "checking stored files against their headers…".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-checking-stored-headers").to_owned();
 
                 let (tx, rx) = tokio::sync::watch::channel(Default::default());
                 self.scan_rx = Some(rx);
                 Task::perform(
-                    tasks::scan_and_repair(self.layout.clone(), self.selected.code.clone(), tx),
+                    tasks::scan_and_repair(self.layout.clone(), self.selected.code.clone(), self.config.interface_language.clone(), tx),
                     |result| Message::Scanned(Box::new(result)),
                 )
             }
@@ -50,14 +51,8 @@ impl Lightforge {
                     Ok(scan) => {
                         // The download refetches what repair dropped.
                         self.status = match scan.damaged {
-                            0 => format!(
-                                "{} files verified — none damaged; checking for anything missing",
-                                scan.checked
-                            ),
-                            n => format!(
-                                "{n} damaged of {} — {} dropped, fetching them again",
-                                scan.checked, scan.removed
-                            ),
+                            0 => i18n::text_with_args(&self.config.interface_language, "repair-headers-healthy", &[("count", &scan.checked.to_string())]),
+                            n => i18n::text_with_args(&self.config.interface_language, "repair-headers-damaged", &[("damaged", &n.to_string()), ("total", &scan.checked.to_string()), ("dropped", &scan.removed.to_string())]),
                         };
                         self.enqueue_for(scanned)
                     }
@@ -74,7 +69,7 @@ impl Lightforge {
                 self.gear_open = false;
                 if let Some(cancel) = &self.deep_cancel {
                     cancel.cancel();
-                    self.status = "stopping the deep scan…".to_owned();
+                    self.status = i18n::text(&self.config.interface_language, "status-stopping-deep-scan").to_owned();
                     return Ok(Task::none());
                 }
                 // Every WoW flavour shares one store, so any transfer at all
@@ -86,12 +81,12 @@ impl Lightforge {
                         .any(|d| matches!(d.stage, Stage::Running { .. } | Stage::Queued));
                 if transferring {
                     self.error = Some(
-                        "pause downloads first — they write to the files being checked".into(),
+                        i18n::text(&self.config.interface_language, "repair-pause-downloads-first").into(),
                     );
                     return Ok(Task::none());
                 }
                 if let Some(what) = self.maintenance() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", what)]).into());
                     return Ok(Task::none());
                 }
                 self.scan_for = Some(self.selected.code.clone());
@@ -100,7 +95,7 @@ impl Lightforge {
                 self.scanning = true;
                 self.owed_repair = None;
                 self.scan_sample = Default::default();
-                self.status = "checking every stored byte — the game can stay open".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-checking-every-byte").to_owned();
 
                 let cancel = Cancel::new();
                 self.deep_cancel = Some(cancel.clone());
@@ -118,7 +113,7 @@ impl Lightforge {
                 let stopped = self.deep_cancel.take().is_some_and(|c| c.is_cancelled());
                 match *result {
                     Err(_) if stopped => {
-                        self.status = "deep scan stopped".to_owned();
+                        self.status = i18n::text(&self.config.interface_language, "status-deep-scan-stopped").to_owned();
                         self.pump()
                     }
                     Err(e) => {
@@ -126,19 +121,12 @@ impl Lightforge {
                         self.pump()
                     }
                     Ok(report) if report.is_healthy() => {
-                        self.status = format!(
-                            "{} files checked down to the byte — none damaged",
-                            report.checked
-                        );
+                        self.status = i18n::text_with_args(&self.config.interface_language, "repair-deep-healthy", &[("count", &report.checked.to_string())]);
                         self.pump()
                     }
                     // Before the queue is released, or the findings go stale.
                     Ok(report) => {
-                        self.status = format!(
-                            "{} damaged of {} — repairing…",
-                            report.damaged.len(),
-                            report.checked
-                        );
+                        self.status = i18n::text_with_args(&self.config.interface_language, "repair-deep-damaged", &[("damaged", &report.damaged.len().to_string()), ("total", &report.checked.to_string())]);
                         self.owed_repair = Some((scanned, Box::new(report)));
                         self.update(Message::RepairDamaged)
                     }
@@ -153,14 +141,11 @@ impl Lightforge {
                 // Kept owed, and said so, not started: the game has
                 // the store open, or something else is writing it.
                 let held = match self.store_writer() {
-                    Some(what) => Some(format!("wait for {what} to finish")),
-                    None => self.in_play().then(|| "close the game".to_owned()),
+                    Some(what) => Some(i18n::text_with_args(&self.config.interface_language, "repair-wait-for", &[("what", what)])),
+                    None => self.in_play().then(|| i18n::text(&self.config.interface_language, "repair-close-game")),
                 };
                 if let Some(held) = held {
-                    self.status = format!(
-                        "{} damaged files found — {held}, then choose Repair Damaged Files",
-                        report.damaged.len()
-                    );
+                    self.status = i18n::text_with_args(&self.config.interface_language, "repair-held", &[("count", &report.damaged.len().to_string()), ("held", &held)]);
                     return Ok(self.pump());
                 }
                 // Not `busy`, which belongs to a launch.
@@ -175,16 +160,13 @@ impl Lightforge {
                         self.owed_repair = None;
                         if code == self.selected.code {
                             self.status =
-                                format!("{removed} damaged files dropped — fetching them again");
+                                i18n::text_with_args(&self.config.interface_language, "repair-files-dropped", &[("count", &removed.to_string())]);
                         }
                         self.enqueue_for(code)
                     }
                     Err(tasks::Unrepaired::InUse) => {
                         let damaged = self.owed_repair.as_ref().map_or(0, |(_, r)| r.damaged.len());
-                        self.status = format!(
-                            "{damaged} damaged files found — close the game and Battle.net, \
-                             then choose Repair Damaged Files"
-                        );
+                        self.status = i18n::text_with_args(&self.config.interface_language, "repair-close-game-battlenet", &[("count", &damaged.to_string())]);
                         self.pump()
                     }
                     Err(tasks::Unrepaired::Failed(e)) => {

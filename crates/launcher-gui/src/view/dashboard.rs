@@ -10,9 +10,10 @@ impl Lightforge {
     /// Offering those disabled would say Lightforge could manage this game and
     /// merely will not.
     pub(crate) fn handoff_panel(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let mut left = column![].spacing(theme::SM).width(Length::Fill);
         left = left.push(match &self.error {
-            Some(e) => problem(e),
+            Some(e) => problem(e, language),
             None => text(self.status.clone()).size(theme::LABEL).color(theme::MUTED).into(),
         });
 
@@ -20,18 +21,22 @@ impl Lightforge {
         match self.installed_versions.get(self.selected.code.as_str()) {
             Some(version) => {
                 left = left.push(
-                    row![muted("installed".to_owned(), theme::LABEL), mono(version.clone())]
+                    row![muted(i18n::text(language, "common-installed"), theme::LABEL), mono(version.clone())]
                         .spacing(theme::SM)
                         .align_y(Alignment::Center),
                 );
             }
             // Said out loud, because the button changing word for word is
             // easy to miss on a screen that is mostly key art.
-            None => left = left.push(muted("not installed".to_owned(), theme::LABEL)),
+            None => left = left.push(muted(i18n::text(language, "common-not-installed"), theme::LABEL)),
         }
 
         let act = self.handoff_act();
-        left = left.extend(self.hint(act.hint()).map(Element::from));
+        left = left.extend(self.hint(i18n::text(language, match act {
+            HandoffAct::Play => "dashboard-handoff-play-hint",
+            HandoffAct::Install => "dashboard-handoff-install-hint",
+            HandoffAct::OpenClient => "dashboard-handoff-open-hint",
+        })).map(Element::from));
         // "its games": one environment covers every game the client starts.
         left = left.push(self.ring(
             focus::Target::HandOffSettings,
@@ -41,7 +46,7 @@ impl Lightforge {
                     image(sliders_icon())
                         .width(Length::Fixed(LINK_GLYPH))
                         .height(Length::Fixed(LINK_GLYPH)),
-                    text("How Battle.net and its games launch").size(theme::LABEL),
+                    text(i18n::text(language, "dashboard-battlenet-games-launch")).size(theme::LABEL),
                 ]
                 .spacing(theme::XS)
                 .align_y(Alignment::Center),
@@ -55,8 +60,12 @@ impl Lightforge {
         let stoppable = session.is_some_and(|s| !s.stopping);
         let open = button(
             container(text(match session {
-                Some(session) => stop_label(session),
-                None => act.label(),
+                Some(session) => stop_label(session, language),
+                None => i18n::text(language, match act {
+                    HandoffAct::Play => "dashboard-handoff-play",
+                    HandoffAct::Install => "dashboard-handoff-install",
+                    HandoffAct::OpenClient => "dashboard-handoff-open",
+                }),
             })
             .size(theme::HEADING))
             .center_x(Length::Fill),
@@ -104,12 +113,12 @@ impl Lightforge {
     /// `aside` is a fact (a count, a state), not a control.
     pub(crate) fn page<'a>(
         &'a self,
-        title: &'a str,
+        title: impl Into<String>,
         subtitle: Option<String>,
         aside: Option<Element<'a, Message>>,
         content: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let mut heading = column![text(title).size(theme::TITLE)].spacing(theme::XS);
+        let mut heading = column![text(title.into()).size(theme::TITLE)].spacing(theme::XS);
         if let Some(subtitle) = subtitle {
             heading = heading.push(muted(subtitle, theme::LABEL));
         }
@@ -138,6 +147,7 @@ impl Lightforge {
     }
 
     pub(crate) fn dashboard(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let action = self.action();
         let kind = self.kind_of(&self.selected.code);
 
@@ -177,8 +187,13 @@ impl Lightforge {
                 .into()
             }
             None => column![
-                text(self.selected.label.clone()).size(theme::DISPLAY),
-                muted("no artwork configured".to_owned(), theme::LABEL),
+                text(i18n::product_title(
+                    language,
+                    self.selected.code.as_str(),
+                    &self.selected.label,
+                ))
+                .size(theme::DISPLAY),
+                muted(i18n::text(language, "dashboard-no-artwork"), theme::LABEL),
             ]
             .spacing(theme::XS)
             .into(),
@@ -264,19 +279,25 @@ impl Lightforge {
     /// The left of the panel: branch, status, progress or the installed
     /// version, optional content, and the links under them.
     fn action_details(&self, action: &ActionState) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let mut left = column![].spacing(theme::SM).width(Length::Fill);
 
         // Here, not in the header: every line below refers to the branch.
         if let Some((branches, current)) = self.branch_choices() {
+            let branches = branches
+                .into_iter()
+                .map(|choice| DisplayChoice(choice.clone(), choice.label(language)))
+                .collect();
+            let current = DisplayChoice(current.clone(), current.label(language));
             left = left.push(
                 row![
-                    muted("version".to_owned(), theme::CAPTION),
+                    muted(i18n::text(language, "dashboard-version"), theme::CAPTION),
                     self.picker(
                         "version".to_owned(),
                         branches,
                         Some(current),
                         "",
-                        Message::BranchSelected,
+                        |choice| Message::BranchSelected(choice.0),
                         Length::Shrink,
                         theme::LABEL,
                     ),
@@ -287,11 +308,9 @@ impl Lightforge {
         }
 
         left = left.push(match (&self.error, action) {
-            (Some(e), _) => problem(e),
+            (Some(e), _) => problem(e, &self.config.interface_language),
             // The missing drive outranks the version line.
-            (None, ActionState::Offline { drive }) => text(format!(
-                "{drive} is not mounted — the game is still on it, untouched"
-            ))
+            (None, ActionState::Offline { drive }) => text(i18n::text_with_args(language, "dashboard-drive-offline", &[("drive", drive)]))
             .size(theme::LABEL)
             .color(theme::ERROR)
             .into(),
@@ -305,10 +324,10 @@ impl Lightforge {
                 .download_for(&self.selected.code)
                 .map(|d| d.sample.stage.clone())
                 .unwrap_or_default();
-            left = transfer_lines(left, progress, stage);
+            left = transfer_lines(left, progress, stage, &self.config.interface_language);
         } else if let Some(version) = &self.local.version {
             left = left.push(
-                row![muted("installed".to_owned(), theme::CAPTION), mono(version.clone())]
+                row![muted(i18n::text(language, "common-installed"), theme::CAPTION), mono(version.clone())]
                     .spacing(theme::SM)
                     .align_y(Alignment::Center),
             );
@@ -321,9 +340,9 @@ impl Lightforge {
         let opted = self.opted_optional(&self.selected.code);
         if !opted.is_empty() && matches!(action, ActionState::Install | ActionState::Update { .. })
         {
-            let names: Vec<String> = opted.iter().map(|t| optional_label(t)).collect();
+            let names: Vec<String> = opted.iter().map(|t| optional_label(t, &self.config.interface_language)).collect();
             left = left.push(muted(
-                format!("includes optional content: {}", names.join(", ")),
+                i18n::text_with_args(language, "dashboard-includes-optional", &[("content", &names.join(", "))]),
                 theme::CAPTION,
             ));
         }
@@ -334,6 +353,7 @@ impl Lightforge {
     /// The pre-download beside PLAY: what can be fetched ahead of a release,
     /// how far it has got, or that it is done.
     fn pre_download_lines<'a>(&'a self, left: Column<'a, Message>) -> Column<'a, Message> {
+        let language = &self.config.interface_language;
         let code = &self.selected.code;
         let offer = state::pre_download(&self.local, self.remote.as_ref(), self.bgdl.as_ref());
         let version = match &offer {
@@ -348,29 +368,29 @@ impl Lightforge {
 
         if let Some(download) = self.download_for(code).filter(|d| d.pre_download) {
             let control = match download.stage {
-                Stage::Running { .. } => action("Pause", Message::PauseDownload(code.clone())),
-                Stage::Paused(_) => action("Resume", Message::ResumeDownload(code.clone())),
-                Stage::Queued => muted("queued".to_owned(), theme::CAPTION).into(),
+                Stage::Running { .. } => action(&i18n::text(language, "common-pause"), Message::PauseDownload(code.clone())),
+                Stage::Paused(_) => action(&i18n::text(language, "common-resume"), Message::ResumeDownload(code.clone())),
+                Stage::Queued => muted(i18n::text(language, "common-queued"), theme::CAPTION).into(),
             };
             let left = left.push(
-                row![muted(format!("pre-downloading {version}"), theme::CAPTION).width(Length::Fill), control]
+                row![muted(i18n::text_with_args(language, "dashboard-pre-downloading", &[("version", &version)]), theme::CAPTION).width(Length::Fill), control]
                     .spacing(theme::SM)
                     .align_y(Alignment::Center),
             );
-            return transfer_lines(left, download.progress(), download.sample.stage.clone());
+            return transfer_lines(left, download.progress(), download.sample.stage.clone(), &self.config.interface_language);
         }
         match offer {
             Some(state::PreDownload::Available { version }) => left.push(
                 row![
-                    muted(format!("{version} can be pre-downloaded before its release"), theme::CAPTION)
+                    muted(i18n::text_with_args(language, "dashboard-predownload-available", &[("version", &version)]), theme::CAPTION)
                         .width(Length::Fill),
-                    action("Pre-download", Message::PreDownload),
+                    action(&i18n::text(language, "dashboard-predownload"), Message::PreDownload),
                 ]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center),
             ),
             Some(state::PreDownload::Ready { version }) => {
-                left.push(muted(format!("{version} is pre-downloaded, ready for release day"), theme::CAPTION))
+                left.push(muted(i18n::text_with_args(language, "dashboard-predownload-ready", &[("version", &version)]), theme::CAPTION))
             }
             None => left,
         }
@@ -378,9 +398,10 @@ impl Lightforge {
 
     /// Manage Addons, Game Settings, Manage Subscription.
     fn product_links(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         // A mark before each says "control". Padded on all sides, or the
         // text touches the hover fill's edge.
-        let link = |mark: image::Handle, label: &'static str, message: Option<Message>| {
+        let link = |mark: image::Handle, label: String, message: Option<Message>| {
             button(
                 row![
                     image(mark)
@@ -406,19 +427,19 @@ impl Lightforge {
                 self.local.version.is_some().then_some(Message::Show(Screen::Addons)),
                 link(
                     package_icon(),
-                    "Manage Addons",
+                    i18n::text(language, "dashboard-manage-addons"),
                     self.local.version.is_some().then_some(Message::Show(Screen::Addons)),
                 ),
             ),
             self.ring(
                 focus::Target::GameSettings,
                 Some(Message::OpenGameSettings),
-                link(sliders_icon(), "Game Settings", Some(Message::OpenGameSettings)),
+                link(sliders_icon(), i18n::text(language, "menu-game-settings"), Some(Message::OpenGameSettings)),
             ),
             self.ring(
                 focus::Target::Subscription,
                 Some(Message::ManageSubscription),
-                link(card_icon(), "Manage Subscription", Some(Message::ManageSubscription)),
+                link(card_icon(), i18n::text(language, "dashboard-manage-subscription"), Some(Message::ManageSubscription)),
             ),
         ]
         // Each link carries its own air.
@@ -430,6 +451,7 @@ impl Lightforge {
     /// The right of the panel: the primary action with its cog, Battle.net
     /// under it, and the release date when there is one.
     fn action_buttons(&self, action: &ActionState) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let color = match action {
             ActionState::Install => theme::INSTALL,
             ActionState::Update { .. } => theme::UPDATE,
@@ -445,9 +467,9 @@ impl Lightforge {
         let release_date = self.families.release_date(self.selected.code.as_str(), "default");
         let session = self.session(&self.selected.code);
         let label = match (session, action, release_date) {
-            (Some(session), ..) => stop_label(session),
-            (None, ActionState::Install, Some(_)) => "PRE-INSTALL",
-            _ => action.label(),
+            (Some(session), ..) => stop_label(session, language),
+            (None, ActionState::Install, Some(_)) => i18n::text(language, "dashboard-pre-install").to_uppercase(),
+            _ => action_label(action, language),
         };
         // This game being up turns its PLAY into STOP, in the colour of the
         // other thing this button never is: an error.
@@ -464,7 +486,7 @@ impl Lightforge {
         .width(Length::Fixed(190.0))
         .height(Length::Fixed(theme::CONTROL_HEIGHT));
         let battle_net = button(
-            container(text("Launch via Battle.net").size(theme::tap_text(theme::LABEL))).center_x(Length::Fill),
+            container(text(i18n::text(language, "dashboard-launch-via-battlenet")).size(theme::tap_text(theme::LABEL))).center_x(Length::Fill),
         )
         .style(theme::outlined)
         .padding(theme::tap([theme::SM, theme::MD]))
@@ -518,7 +540,7 @@ impl Lightforge {
                 },
             ),
         ]
-        .push(release_date.map(|date| muted(servers_open(date), theme::CAPTION)))
+        .push(release_date.map(|date| muted(servers_open(date, &self.config.interface_language), theme::CAPTION)))
         .spacing(theme::SM)
         .align_x(Alignment::Center)
         .width(Length::Shrink)
@@ -527,15 +549,29 @@ impl Lightforge {
 }
 
 /// The word on a running game's button.
-fn stop_label(session: &Session) -> &'static str {
+fn stop_label(session: &Session, language: &str) -> String {
     match session.stopping {
-        true => "STOPPING…",
-        false => "STOP",
+        true => crate::i18n::text(language, "dashboard-stopping"),
+        false => crate::i18n::text(language, "dashboard-stop"),
     }
 }
 
+fn action_label(action: &ActionState, language: &str) -> String {
+    let id = match action {
+        ActionState::Unknown => return "…".to_owned(),
+        ActionState::Install => "dashboard-action-install",
+        ActionState::Update { .. } => "dashboard-action-update",
+        ActionState::Queued => "dashboard-action-queued",
+        ActionState::Downloading(_) => "dashboard-action-pause",
+        ActionState::Paused(_) => "dashboard-action-resume",
+        ActionState::Play => "dashboard-action-play",
+        ActionState::Error { .. } | ActionState::Offline { .. } => "dashboard-action-retry",
+    };
+    crate::i18n::text(language, id).to_uppercase()
+}
+
 /// A transfer's bar, its figures, and what it is doing.
-fn transfer_lines<'a>(left: Column<'a, Message>, progress: state::Progress, stage: String) -> Column<'a, Message> {
+fn transfer_lines<'a>(left: Column<'a, Message>, progress: state::Progress, stage: String, language: &str) -> Column<'a, Message> {
     // Sweeps while there is work but no fraction: before the total, and
     // while extracting after the last byte.
     let sweeping = progress.total_bytes == 0 || progress.downloaded_bytes >= progress.total_bytes;
@@ -549,13 +585,13 @@ fn transfer_lines<'a>(left: Column<'a, Message>, progress: state::Progress, stag
             dot(),
             mono(rate_of(progress.bytes_per_second)),
             dot(),
-            mono(eta_of(progress)),
+            mono(eta_of(language, progress)),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center),
     );
     match stage.is_empty() {
         true => left,
-        false => left.push(muted(stage, theme::CAPTION)),
+        false => left.push(muted(crate::i18n::transfer_stage(language, &stage), theme::CAPTION)),
     }
 }

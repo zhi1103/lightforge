@@ -113,7 +113,7 @@ impl Lightforge {
                     return Ok(Task::none());
                 }
                 let Some(product) = self.config.product_mut(&dialog.code) else {
-                    self.error = Some(format!("{} is not a managed game", dialog.label).into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "game-not-managed", &[("game", &dialog.label)]).into());
                     return Ok(Task::none());
                 };
                 product.profile.locale = Some(dialog.locale);
@@ -218,11 +218,11 @@ impl Lightforge {
                     return Ok(Task::none());
                 };
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 let cache = self.layout.product_dir(&settings.code).join("Cache");
-                Task::perform(tasks::clear_game_cache(cache), Message::GameCacheCleared)
+                Task::perform(tasks::clear_game_cache(cache, self.config.interface_language.clone()), Message::GameCacheCleared)
             }
             Message::GameCacheCleared(result) => {
                 match result {
@@ -289,13 +289,11 @@ impl Lightforge {
                     match result {
                         Ok(plan) if plan.entries.is_empty() => {
                             settings.note =
-                                Some(Ok("Switched off. No texture files are installed.".to_owned()))
+                                Some(Ok(i18n::text(&self.config.interface_language, "optional-switched-off-no-files")))
                         }
                         Ok(plan) => settings.textures = TexturesStep::Ask(plan),
                         Err(e) => {
-                            settings.note = Some(Err(format!(
-                                "Switched off, but the files could not be listed: {e}"
-                            )))
+                            settings.note = Some(Err(i18n::text_with_args(&self.config.interface_language, "optional-switched-off-list-failed", &[("error", &e)])))
                         }
                     }
                 }
@@ -306,7 +304,7 @@ impl Lightforge {
                 if let Some(settings) = self.game_settings.as_mut() {
                     settings.textures = TexturesStep::Idle;
                     settings.note = Some(Ok(
-                        "Switched off. The files stay on disk until you delete them.".to_owned(),
+                        i18n::text(&self.config.interface_language, "optional-switched-off-kept"),
                     ));
                 }
                 Task::none()
@@ -327,19 +325,19 @@ impl Lightforge {
                 if busy {
                     settings.textures = TexturesStep::Ask(plan);
                     settings.note =
-                        Some(Err("A download is writing to this install; wait for it.".to_owned()));
+                        Some(Err(i18n::text(&self.config.interface_language, "optional-download-writing")));
                     return Ok(Task::none());
                 }
                 settings.note = None;
                 settings.textures = TexturesStep::Removing;
-                Task::perform(tasks::optional_remove(layout, code, *plan), Message::OptionalRemoved)
+                Task::perform(tasks::optional_remove(layout, code, self.config.interface_language.clone(), *plan), Message::OptionalRemoved)
             }
 
             Message::OptionalRemoved(result) => {
                 if let Some(settings) = self.game_settings.as_mut() {
                     settings.textures = TexturesStep::Idle;
                     settings.note = Some(match result {
-                        Ok(freed) => Ok(format!("Deleted the textures, {} freed.", size_of(freed))),
+                        Ok(freed) => Ok(i18n::text_with_args(&self.config.interface_language, "optional-deleted-textures", &[("size", &size_of(freed))])),
                         Err(e) => Err(e.to_string()),
                     });
                 }
@@ -373,7 +371,7 @@ impl Lightforge {
                 settings.working = true;
                 settings.confirm = None;
                 Task::perform(
-                    tasks::create_backup(self.layout.clone(), settings.code.clone()),
+                    tasks::create_backup(self.layout.clone(), settings.code.clone(), self.config.interface_language.clone()),
                     Message::BackupFinished,
                 )
             }
@@ -401,7 +399,7 @@ impl Lightforge {
                 };
                 settings.working = true;
                 Task::perform(
-                    tasks::delete_backup(self.layout.clone(), settings.code.clone(), archive),
+                    tasks::delete_backup(self.layout.clone(), settings.code.clone(), archive, self.config.interface_language.clone()),
                     Message::BackupFinished,
                 )
             }
@@ -422,7 +420,7 @@ impl Lightforge {
                 };
                 settings.working = true;
                 Task::perform(
-                    tasks::restore_backup(self.layout.clone(), settings.code.clone(), archive, account),
+                    tasks::restore_backup(self.layout.clone(), settings.code.clone(), archive, account, self.config.interface_language.clone()),
                     Message::BackupFinished,
                 )
             }

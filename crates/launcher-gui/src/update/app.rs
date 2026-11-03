@@ -37,7 +37,8 @@ impl Lightforge {
                 match self.store_writer() {
                     Some(what) => {
                         self.closing = Some(id);
-                        self.status = format!("finishing {what} safely…");
+                        let what = i18n::maintenance_label(&self.config.interface_language, what);
+                        self.status = i18n::text_with_args(&self.config.interface_language, "status-finishing-safely", &[("what", &what)]);
                         Task::none()
                     }
                     None => iced::window::close(id),
@@ -193,6 +194,14 @@ impl Lightforge {
                 self.fit_window()
             }
 
+            Message::InterfaceLanguage(language) => {
+                if i18n::supported_language(&language) {
+                    self.config.interface_language = language;
+                    self.save_config();
+                }
+                Task::none()
+            }
+
             Message::MinimizeOnLaunch(on) => {
                 self.config.minimize_on_launch = on;
                 self.save_config();
@@ -265,7 +274,7 @@ impl Lightforge {
                     .any(|scheme| url.get(..scheme.len()).is_some_and(|start| start.eq_ignore_ascii_case(scheme)));
                 let opened = match web {
                     true => tasks::open_url(&url),
-                    false => Err(format!("not opening {url}: only web links are opened")),
+                    false => Err(i18n::text_with_args(&self.config.interface_language, "error-not-opening-url", &[("url", &url)])),
                 };
                 if let Err(e) = opened {
                     self.error = Some(e.into());

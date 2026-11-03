@@ -8,27 +8,25 @@ impl Lightforge {
     ///
     /// Its own tab: a one-time thing.
     pub(crate) fn addons_import(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let box_ = container(
             column![
-                text("Import from WoWUp").size(theme::HEADING),
+                text(i18n::text(language, "addons-import-wowup-title")).size(theme::HEADING),
                 muted(
-                    "In WoWUp, export your addons and paste the token here. Everything it \
-                     names is fetched from its provider and tracked by Lightforge from then \
-                     on."
-                        .to_owned(),
+                    i18n::text(language, "addons-import-wowup-about"),
                     theme::LABEL,
                 ),
                 row![
                     clickable(
                         "import token",
-                        text_input("Paste a WoWUp import token…", &self.token_input)
+                        text_input(&i18n::text(language, "addons-import-token-placeholder"), &self.token_input)
                             .on_input(Message::TokenChanged)
                             .on_submit(Message::ImportToken)
                             .style(theme::field)
                             .size(theme::BODY)
                             .padding(theme::SM),
                     ),
-                    action_button("Import", theme::ACCENT, Message::ImportToken)
+                    action_button(&i18n::text(language, "addons-tab-import"), theme::ACCENT, Message::ImportToken)
                         .enabled(!self.addons_locked() && !self.token_input.trim().is_empty()),
                 ]
                 .spacing(theme::SM)
@@ -52,31 +50,25 @@ impl Lightforge {
     ///
     /// Beside Import, as its opposite.
     pub(crate) fn addons_export(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let managed = self.addons.managed;
         let box_ = container(
             column![
                 row![
                     column![
-                        text("Export").size(theme::HEADING),
+                        text(i18n::text(language, "addons-tab-export")).size(theme::HEADING),
                         muted(
                             match managed {
-                                0 => "Nothing to export yet — only addons Lightforge \
-                                      installed can be named in a token."
-                                    .to_owned(),
-                                1 => "A token naming the 1 addon Lightforge manages here, \
-                                      to import on another machine or in WoWUp."
-                                    .to_owned(),
-                                n => format!(
-                                    "A token naming the {n} addons Lightforge manages here, \
-                                     to import on another machine or in WoWUp."
-                                ),
+                                0 => i18n::text(language, "addons-export-none"),
+                                1 => i18n::text(language, "addons-export-one"),
+                                n => i18n::text_with_args(language, "addons-export-many", &[("count", &n.to_string())]),
                             },
                             theme::LABEL,
                         ),
                     ]
                     .spacing(theme::XS)
                     .width(Length::Fill),
-                    action_button("Export", theme::ACCENT, Message::ExportAddons)
+                    action_button(&i18n::text(language, "addons-tab-export"), theme::ACCENT, Message::ExportAddons)
                         .enabled(!self.addons_locked() && managed > 0),
                 ]
                 .spacing(theme::MD)
@@ -96,7 +88,7 @@ impl Lightforge {
                                 .size(theme::BODY)
                                 .padding(theme::SM),
                         ),
-                        secondary("Copy", Message::CopyExport).enabled(true),
+                        secondary(&i18n::text(language, "settings-about-copy"), Message::CopyExport).enabled(true),
                     ]
                     .spacing(theme::SM)
                     .align_y(Alignment::Center),

@@ -150,10 +150,10 @@ impl Lightforge {
     /// Add the partition at `index` as a library.
     pub(crate) fn add_drive(&mut self, index: usize) -> Result<(), String> {
         let Some(partition) = self.partitions.get(index).cloned() else {
-            return Err("that drive is no longer there".to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-drive-no-longer-available"));
         };
         let (games_letter, wow_letter) = library::allocate_letters(&self.config.libraries)
-            .ok_or_else(|| library::LibraryError::NoLettersLeft.to_string())?;
+            .ok_or_else(|| i18n::text(&self.config.interface_language, "storage-no-drive-letters-left"))?;
         let mut library = library::Library::on_partition(
             &partition.point,
             partition.label.clone(),
@@ -161,9 +161,9 @@ impl Lightforge {
         );
         library.games_letter = games_letter;
         library.wow_letter = wow_letter;
-        library.claim().map_err(|e| chain(&e))?;
+        library.claim().map_err(|e| i18n::library_error(&self.config.interface_language, &e))?;
         if self.config.libraries.iter().any(|l| l.id == library.id) {
-            return Err(format!("{} is already a Lightforge drive", partition.label));
+            return Err(i18n::text_with_args(&self.config.interface_language, "storage-drive-already-added", &[("drive", &partition.label)]));
         }
         self.config.libraries.push(library);
         self.save_config();
@@ -182,16 +182,13 @@ impl Lightforge {
             return Ok(());
         };
         if library.is_default && self.config.libraries.len() > 1 {
-            return Err("make another drive the default one first".to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-make-another-drive-default-first"));
         }
         if self.config.libraries.len() == 1 {
-            return Err("this is the only drive Lightforge has".to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-only-drive-cannot-remove"));
         }
         if storage::holds_wow(&self.layout, &library) {
-            return Err(format!(
-                "{} holds a World of Warcraft install — uninstall it first",
-                library.label
-            ));
+            return Err(i18n::text_with_args(&self.config.interface_language, "storage-drive-holds-wow-install", &[("drive", &library.label)]));
         }
         // The links stay until the next provision; a dangling one is inert.
         self.config.libraries.retain(|l| l.id != id);
@@ -242,18 +239,22 @@ impl Lightforge {
     ///
     /// Only while nothing is installed: otherwise it is a data migration.
     pub(crate) fn relocate(&mut self) -> Result<(), String> {
-        let path = parse_path(&self.location_input)?;
+        let path = parse_path(&self.location_input).map_err(|error| {
+            if let Some(path) = error.strip_suffix(" is not a full path — start it with / or ~/") {
+                i18n::text_with_args(&self.config.interface_language, "storage-path-not-full", &[("path", path)])
+            } else {
+                error
+            }
+        })?;
         if path == self.layout.root() {
             return Ok(());
         }
         let downloading = self.queue.iter().any(|d| matches!(d.stage, Stage::Running { .. }));
         if self.setup_running || downloading {
-            return Err("wait for setup and downloads to finish first".to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-wait-for-setup-and-downloads"));
         }
         if !storage::library_is_empty(&self.layout) {
-            return Err("the current library has games or a prefix in it; moving an \
-                        installed library is not supported yet"
-                .to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-moving-installed-library-not-supported"));
         }
 
         let default = Layout::default_for_user().ok();
@@ -286,7 +287,7 @@ impl Lightforge {
             return false;
         }
         let Some(dirs) = self.dirs.as_ref() else {
-            self.error = Some("no config directory available".into());
+            self.error = Some(i18n::text(&self.config.interface_language, "storage-no-config-directory").into());
             return false;
         };
         match self.config.save(&dirs.config_file()) {

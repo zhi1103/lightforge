@@ -8,11 +8,12 @@ impl Lightforge {
     ///
     /// Installing is in this card's own header.
     pub(crate) fn proton_builds(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let mut rows = column![].spacing(theme::SM);
 
         let installed = self.setup.as_ref().map(|s| s.installed.as_slice()).unwrap_or_default();
         if installed.is_empty() {
-            rows = rows.push(muted("none found yet".to_owned(), theme::LABEL));
+            rows = rows.push(muted(i18n::text(language, "settings-proton-none-found"), theme::LABEL));
         }
 
         for build in installed {
@@ -41,11 +42,11 @@ impl Lightforge {
                     .keyed(format!("proton idle {}", build.version), false)
             };
             let action: Element<Message> = match (managed, pinned_by.is_empty()) {
-                (false, _) => idle("Not managed here".to_owned()),
+                (false, _) => idle(i18n::text(language, "settings-proton-not-managed")),
                 (true, false) => tooltip(
                     idle(match pinned_by.len() {
-                        1 => "In use by 1".to_owned(),
-                        n => format!("In use by {n}"),
+                        1 => i18n::text(language, "settings-proton-in-use-one"),
+                        n => i18n::text_with_args(language, "settings-proton-in-use-many", &[("count", &n.to_string())]),
                     }),
                     container(text(pinned_by.join(", ")).size(theme::LABEL))
                         .padding([theme::XS, theme::SM])
@@ -53,7 +54,7 @@ impl Lightforge {
                     tooltip::Position::Left,
                 )
                 .into(),
-                (true, true) => secondary("Remove", Message::RemoveProton(build.version.clone()))
+                (true, true) => secondary(&i18n::text(language, i18n::COMMON_REMOVE), Message::RemoveProton(build.version.clone()))
                     .enabled(!self.setup_running),
             };
 
@@ -93,7 +94,7 @@ impl Lightforge {
     /// The control that adds a build, for the Builds card's header: one
     /// button, the window behind it has the lists.
     pub(crate) fn proton_install(&self) -> Element<'_, Message> {
-        secondary("Install Proton Version", Message::OpenProtonInstaller)
+        secondary(&i18n::text(&self.config.interface_language, "settings-proton-install-version"), Message::OpenProtonInstaller)
             .enabled(!self.setup_running)
     }
 
@@ -101,16 +102,17 @@ impl Lightforge {
     ///
     /// Every installed game, not the one the Play page shows.
     pub(crate) fn proton_section(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let games = self.installed_products();
         // Two questions: which Proton each game runs, and which Protons are
         // on this machine.
         column![
-            group_label("Games", None),
+            group_label(i18n::text(language, "settings-proton-games"), None),
             setting_group(self.game_pins(&games)),
-            group_label("When a game has no pin", None),
+            group_label(i18n::text(language, "settings-proton-no-pin"), None),
             setting_group(self.fallback_pins()),
             self.pin_notes(&games),
-            group_label("Installed builds", Some(self.proton_install())),
+            group_label(i18n::text(language, "settings-proton-installed-builds"), Some(self.proton_install())),
             setting_card(self.proton_builds()),
         ]
         .spacing(theme::SM)
@@ -133,13 +135,15 @@ impl Lightforge {
                     .flat_map(|s| s.installed.iter())
                     .map(|build| ProtonChoice(Some(build.version.clone()), unpinned)),
             )
+            .map(|choice| DisplayChoice(choice.clone(), choice.label(&self.config.interface_language)))
             .collect();
+        let current = ProtonChoice(current, unpinned);
         self.picker(
             key,
             builds,
-            Some(ProtonChoice(current, unpinned)),
+            Some(DisplayChoice(current.clone(), current.label(&self.config.interface_language))),
             "",
-            on_pick,
+            move |choice| on_pick(choice.0),
             Length::Fixed(260.0),
             theme::BODY,
         )
@@ -148,6 +152,7 @@ impl Lightforge {
     /// One row per installed game, in the order the config lists them, the
     /// same order as the Play page's tiles, so the two read alike.
     fn game_pins(&self, games: &[(ProductCode, String)]) -> Vec<Element<'_, Message>> {
+        let language = &self.config.interface_language;
         let mut pins: Vec<Element<'_, Message>> = Vec::new();
         for (code, label) in games {
             // Hand-off titles too: their pin is honoured, in the shared prefix.
@@ -160,21 +165,21 @@ impl Lightforge {
             // Both signs: the shop build, and the shared prefix's downgrade.
             let mut tags: Vec<Element<'_, Message>> = Vec::new();
             match self.shop_build_state(code) {
-                ShopBuild::Running => tags.push(tag("In-game shop working".to_owned(), theme::OK)),
+                ShopBuild::Running => tags.push(tag(i18n::text(language, "settings-proton-shop-working"), theme::OK)),
                 ShopBuild::Elsewhere => {
-                    tags.push(tag(format!("{} recommended", proton::SHOP_BUILD), theme::UPDATE))
+                    tags.push(tag(i18n::text_with_args(language, "settings-proton-recommended", &[("build", proton::SHOP_BUILD)]), theme::UPDATE))
                 }
                 ShopBuild::NotWow => {}
             }
             if self.row_fit(code).is_downgrade() {
-                tags.push(tag("Older than this prefix".to_owned(), theme::UPDATE));
+                tags.push(tag(i18n::text(language, "settings-proton-older-than-prefix"), theme::UPDATE));
             }
 
             pins.push(pin_line(
                 label.clone(),
                 match Kind::of(code) {
-                    Kind::Managed => "Started by Lightforge",
-                    Kind::HandOff => "Started by Battle.net",
+                    Kind::Managed => i18n::text(language, "settings-proton-started-by-lightforge"),
+                    Kind::HandOff => i18n::text(language, "settings-proton-started-by-battlenet"),
                 },
                 tags,
                 self.proton_picker(
@@ -192,19 +197,25 @@ impl Lightforge {
         // Nothing installed is worth saying: an empty card looks like a page
         // that failed to load.
         if games.is_empty() {
-            pins.push(setting("No games yet", "Games appear here once they are installed.", None, Space::new()));
+            pins.push(setting(
+                i18n::text(language, "settings-proton-no-games"),
+                i18n::text(language, "settings-proton-games-appear-here"),
+                None,
+                Space::new(),
+            ));
         }
         pins
     }
 
     /// The two rows the games fall back to: Lightforge's default and Battle.net's.
     fn fallback_pins(&self) -> Vec<Element<'_, Message>> {
+        let language = &self.config.interface_language;
         // A group of their own, because they are not games. The rows above
         // are things you launch; these two are what they fall back to.
         vec![
             pin_line(
-                "Default".to_owned(),
-                "Every game Lightforge starts without a pin of its own.",
+                i18n::text(language, "settings-proton-default"),
+                i18n::text(language, "settings-proton-default-about"),
                 Vec::new(),
                 self.proton_picker(
                     "proton default".to_owned(),
@@ -215,12 +226,12 @@ impl Lightforge {
             ),
             pin_line(
                 "Battle.net".to_owned(),
-                "Battle.net, Agent, and the games it starts without a pin.",
+                i18n::text(language, "settings-proton-battlenet-about"),
                 // The prefix's own build, beside the pin that will next open it.
                 // The one fact that makes the signs above legible.
                 vec![match self.setup.as_ref().and_then(|s| s.prefix.built_by.as_deref()) {
-                    Some(built_by) => muted(format!("prefix built by {built_by}"), theme::CAPTION),
-                    None => muted("no prefix yet".to_owned(), theme::CAPTION),
+                    Some(built_by) => muted(i18n::text_with_args(language, "settings-proton-prefix-built-by", &[("build", built_by)]), theme::CAPTION),
+                    None => muted(i18n::text(language, "settings-proton-no-prefix-yet"), theme::CAPTION),
                 }
                 .into()],
                 self.proton_picker(
@@ -235,6 +246,7 @@ impl Lightforge {
 
     /// What the pins mean, a downgrade they cause, and the shop's build.
     fn pin_notes(&self, games: &[(ProductCode, String)]) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         // One line for the whole list, not one under each game: the
         // reason is the same every time it applies.
         let shop = games
@@ -251,39 +263,32 @@ impl Lightforge {
         column![]
             .spacing(theme::SM)
             .extend(self.hint(
-                "A game with no pin of its own follows the default. Battle.net and Agent \
-                 are a different workload from the game, so they pin separately — a game \
-                 Battle.net starts for you follows the game's own pin where it has one, \
-                 and Battle.net's where it does not.",
+                i18n::text(language, "settings-proton-pinning-hint"),
             ).map(Element::from))
             .extend((!downgrade.is_empty()).then(|| {
-                text(format!(
-                    "⚠ {} {} pinned to a build older than the {} that last upgraded the \
-                     prefix. There is one prefix for everything here, and Proton only \
-                     migrates it forward, so an older build may leave it in a state the \
-                     newer one did not expect. You will be asked again at launch.",
-                    downgrade.join(", "),
-                    match downgrade.len() {
-                        1 => "is",
-                        _ => "are",
-                    },
-                    self.setup
-                        .as_ref()
-                        .and_then(|s| s.prefix.built_by.clone())
-                        .unwrap_or_default(),
+                text(i18n::text_with_args(
+                    language,
+                    "settings-proton-downgrade-warning",
+                    &[
+                        ("games", &downgrade.join(", ")),
+                        (
+                            "build",
+                            self.setup
+                                .as_ref()
+                                .and_then(|s| s.prefix.built_by.as_deref())
+                                .unwrap_or_default(),
+                        ),
+                    ],
                 ))
                 .size(theme::LABEL)
                 .color(theme::UPDATE)
             }).map(Element::from))
             .extend(
                 shop.then(|| {
-                    self.hint(format!(
-                        "World of Warcraft's in-game shop and support pages only render \
-                         under {}. Newer builds start the game's embedded browser and lose \
-                         its GPU process, which is the grey box instead of a page. \
-                         Everything else about the game is unaffected — install it under \
-                         Builds below, then pin it here.",
-                        proton::SHOP_BUILD,
+                    self.hint(i18n::text_with_args(
+                        language,
+                        "settings-proton-shop-hint",
+                        &[("build", proton::SHOP_BUILD)],
                     ))
                 })
                 .flatten()
@@ -297,7 +302,7 @@ impl Lightforge {
 /// then the picker, a fixed width so every row's control lines up.
 fn pin_line<'a>(
     label: String,
-    about: &'static str,
+    about: String,
     tags: Vec<Element<'a, Message>>,
     control: Element<'a, Message>,
 ) -> Element<'a, Message> {

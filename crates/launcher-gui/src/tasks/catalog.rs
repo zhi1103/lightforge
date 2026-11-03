@@ -124,7 +124,7 @@ pub async fn check_for_update(
 pub async fn check_for_update_now(
     http: Option<Http>,
 ) -> Result<Option<lightforge_core::update::Available>, String> {
-    let http = http.ok_or_else(|| "no network connection".to_owned())?;
+    let http = http.ok_or_else(|| crate::i18n::error_marker("error-no-network-connection"))?;
     latest_release(http).await
 }
 

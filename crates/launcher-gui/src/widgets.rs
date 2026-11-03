@@ -381,7 +381,7 @@ pub(crate) fn action_button(label: &str, color: iced::Color, message: Message) -
 }
 
 /// The line under a Browse hit whose author turned third-party downloads off.
-pub(crate) fn opted_out_note(words: &'static str) -> Element<'static, Message> {
+pub(crate) fn opted_out_note(words: String) -> Element<'static, Message> {
     text(words).size(theme::CAPTION).color(theme::UPDATE).into()
 }
 
@@ -417,23 +417,23 @@ pub(crate) fn secondary_tall(label: &str, message: Message, height: f32) -> Acti
 
 /// An error as the user sees it: what went wrong, what to do about it, and
 /// the one button that does it, when there is one.
-pub(crate) fn problem(problem: &Problem) -> Element<'_, Message> {
+pub(crate) fn problem<'a>(problem: &'a Problem, language: &str) -> Element<'a, Message> {
     use lightforge_core::advice::Fix;
 
-    let mut body = column![text(format!("⚠ {}", problem.message)).size(theme::LABEL).color(theme::ERROR)]
+    let mut body = column![text(format!("⚠ {}", i18n::error_text(language, &problem.message))).size(theme::LABEL).color(theme::ERROR)]
         .spacing(theme::XS);
     let Some(advice) = &problem.advice else { return body.into() };
     body = body.push(text(advice.todo.clone()).size(theme::LABEL).color(theme::TEXT));
 
     let fix = advice.fix.as_ref().map(|fix| match fix {
-        Fix::DeepScan => ("Run Deep Scan", Message::DeepScan),
-        Fix::ProtonSettings => ("Open Proton settings", Message::ShowSettingsTab(SettingsTab::Proton)),
-        Fix::StorageSettings => ("Open Storage settings", Message::ShowSettingsTab(SettingsTab::Storage)),
-        Fix::CopyCommand(command) => ("Copy the command", Message::CopyRuntimeCommand(command.clone())),
-        Fix::FreshProton(version) => ("Install a fresh copy", Message::FreshProton(version.clone())),
+        Fix::DeepScan => ("problem-fix-deep-scan", Message::DeepScan),
+        Fix::ProtonSettings => ("problem-fix-proton-settings", Message::ShowSettingsTab(SettingsTab::Proton)),
+        Fix::StorageSettings => ("problem-fix-storage-settings", Message::ShowSettingsTab(SettingsTab::Storage)),
+        Fix::CopyCommand(command) => ("problem-fix-copy-command", Message::CopyRuntimeCommand(command.clone())),
+        Fix::FreshProton(version) => ("problem-fix-fresh-copy", Message::FreshProton(version.clone())),
     });
-    if let Some((label, message)) = fix {
-        body = body.push(secondary(label, message).keyed(format!("problem fix {label}"), true));
+    if let Some((key, message)) = fix {
+        body = body.push(secondary(&i18n::text(language, key), message).keyed(format!("problem fix {key}"), true));
     }
     body.into()
 }

@@ -36,7 +36,7 @@ impl Lightforge {
                     .filter(|l| self.drive_states.get(&l.id) == Some(&library::State::Missing))
                     .map(|l| l.label.clone())
                 {
-                    self.error = Some(format!("{drive} is not mounted").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "storage-drive-not-mounted", &[("drive", &drive)]).into());
                     return Ok(Task::none());
                 }
                 for library in &mut self.config.libraries {
@@ -45,7 +45,7 @@ impl Lightforge {
                 self.save_config();
                 self.rebuild_layout();
                 // `DefaultInstallPath` follows at the next pre-flight.
-                self.status = "new installs will go to this drive".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-new-installs-drive").to_owned();
                 self.measure_storage()
             }
             Message::RemoveDrive(id) => {
@@ -66,7 +66,7 @@ impl Lightforge {
                 else {
                     return Ok(Task::none());
                 };
-                self.drive_notice = Some((id.clone(), "clearing…".to_owned()));
+                self.drive_notice = Some((id.clone(), i18n::text(&self.config.interface_language, "status-clearing")));
                 let layout = self.layout.clone();
                 Task::perform(
                     tasks::clear_library(layout, library),
@@ -93,11 +93,11 @@ impl Lightforge {
                 }
                 // Minutes of moving archives: `pump` and pre-flight hold meanwhile.
                 if let Some(what) = self.store_writer() {
-                    self.error = Some(format!("wait for {what} to finish first").into());
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", what)]).into());
                     return Ok(Task::none());
                 }
                 if self.in_play() {
-                    self.error = Some("close the game first".into());
+                    self.error = Some(i18n::text(&self.config.interface_language, "error-close-game-first").into());
                     return Ok(Task::none());
                 }
                 let total = match self.unused.get(&id) {
@@ -107,13 +107,13 @@ impl Lightforge {
                 let copied = Arc::<std::sync::atomic::AtomicU64>::default();
                 self.unused.insert(id.clone(), UnusedData::Freeing { copied: copied.clone(), total });
                 Task::perform(
-                    tasks::free_unused(self.http.clone(), self.layout.clone(), install, copied),
+                    tasks::free_unused(self.http.clone(), self.layout.clone(), install, self.config.interface_language.clone(), copied),
                     move |result| Message::UnusedFreed(id.clone(), result),
                 )
             }
             Message::UnusedFreed(id, result) => {
                 let note = match result {
-                    Ok(bytes) => format!("freed {}", size_of(bytes)),
+                    Ok(bytes) => i18n::text_with_args(&self.config.interface_language, "status-freed-space", &[("size", &size_of(bytes))]),
                     Err(e) => e,
                 };
                 self.unused.insert(id, UnusedData::Said(note));
@@ -121,8 +121,8 @@ impl Lightforge {
             }
             Message::DriveCleared(id, result) => {
                 self.drive_notice = Some(match result {
-                    Ok(0) => (id, "nothing to clear".to_owned()),
-                    Ok(bytes) => (id, format!("freed {}", size_of(bytes))),
+                    Ok(0) => (id, i18n::text(&self.config.interface_language, "status-nothing-to-clear")),
+                    Ok(bytes) => (id, i18n::text_with_args(&self.config.interface_language, "status-freed-space", &[("size", &size_of(bytes))])),
                     Err(e) => (id, e),
                 });
                 self.measure_storage()

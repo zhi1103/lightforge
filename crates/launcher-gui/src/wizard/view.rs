@@ -18,6 +18,7 @@ pub fn view<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message>
         Step::Games => games(app),
         Step::Done => done(app, wizard),
     };
+    let language = &app.config.interface_language;
 
     let card = column![
         match wizard.scan_only {
@@ -25,8 +26,8 @@ pub fn view<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message>
             false => dots(wizard.step),
         },
         text(match wizard.scan_only {
-            true => "Look for games",
-            false => wizard.step.title(),
+            true => crate::i18n::text(language, "wizard-title-look-for-games"),
+            false => wizard.step.title(language),
         })
         .size(theme::TITLE),
         container(body).height(Length::Fill),
@@ -71,40 +72,41 @@ fn dots(step: Step) -> Element<'static, Message> {
 /// No skip-all: every step can be passed, and A once lost the setup.
 fn footer<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
     let mut actions = row![].spacing(theme::SM).align_y(Alignment::Center);
+    let language = &app.config.interface_language;
 
     if wizard.scan_only {
         let ticked = wizard.rows.iter().any(|row| row.take);
         return actions
-            .push(secondary("Close", Message::Wizard(Msg::Back)).enabled(!app.busy))
+            .push(secondary(&crate::i18n::text(language, "common-close"), Message::Wizard(Msg::Back)).enabled(!app.busy))
             .push(Space::new().width(Length::Fill))
             .push(
-                action_button("Add these", theme::INSTALL, Message::Wizard(Msg::Next))
+                action_button(&crate::i18n::text(language, "wizard-add-these"), theme::INSTALL, Message::Wizard(Msg::Next))
                     .enabled(ticked && !wizard.scanning),
             )
             .into();
     }
 
     if wizard.step.back().is_some() && wizard.step != Step::Done {
-        actions = actions.push(secondary("Back", Message::Wizard(Msg::Back)).enabled(!app.busy));
+        actions = actions.push(secondary(&crate::i18n::text(language, "common-back"), Message::Wizard(Msg::Back)).enabled(!app.busy));
     }
     actions = actions.push(Space::new().width(Length::Fill));
 
     // What the step's own button says, and whether it can be pressed yet.
-    let (label, ready): (&str, bool) = match wizard.step {
-        Step::Welcome => ("Get started", welcome_answered(app)),
-        Step::Place => ("Look for my games", true),
+    let (label, ready): (String, bool) = match wizard.step {
+        Step::Welcome => (crate::i18n::text(language, "wizard-get-started"), welcome_answered(app)),
+        Step::Place => (crate::i18n::text(language, "wizard-look-for-my-games"), true),
         Step::Found => (
             match wizard.rows.iter().any(|row| row.take) {
-                true => "Add these and continue",
-                false => "Continue",
+                true => crate::i18n::text(language, "wizard-add-these-continue"),
+                false => crate::i18n::text(language, "common-continue"),
             },
             !wizard.scanning,
         ),
         // Pressable while nothing has been provisioned: someone
         // who cannot install Battle.net today should still reach the end.
-        Step::Install => ("Continue", !app.setup_running),
-        Step::Games => ("Continue", true),
-        Step::Done => ("Ready to play", true),
+        Step::Install => (crate::i18n::text(language, "common-continue"), !app.setup_running),
+        Step::Games => (crate::i18n::text(language, "common-continue"), true),
+        Step::Done => (crate::i18n::text(language, "wizard-ready-to-play"), true),
     };
 
     let message = match wizard.step {
@@ -112,7 +114,7 @@ fn footer<'a>(app: &'a Lightforge, wizard: &'a Wizard) -> Element<'a, Message> {
         _ => Msg::Next,
     };
     actions = actions.push(
-        action_button(label, theme::INSTALL, Message::Wizard(message)).enabled(ready),
+        action_button(&label, theme::INSTALL, Message::Wizard(message)).enabled(ready),
     );
 
     actions.into()

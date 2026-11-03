@@ -16,9 +16,10 @@ impl Lightforge {
     pub(crate) fn settings(&self) -> Element<'_, Message> {
         let mut nav = column![].spacing(theme::XS).width(Length::Fixed(SETTINGS_NAV_WIDTH));
         for tab in SettingsTab::ALL {
+            let label = tab.label(&self.config.interface_language);
             // Pressable while marked too: the mark follows the scrolling, so
             // the marked entry is not necessarily where its section starts.
-            let entry = button(text(tab.label()).size(theme::tap_text(theme::BODY)))
+            let entry = button(text(label).size(theme::tap_text(theme::BODY)))
                 .width(Length::Fill)
                 .padding(theme::tap([theme::SM, theme::MD]))
                 .on_press(Message::SettingsTab(tab))
@@ -33,7 +34,7 @@ impl Lightforge {
         // rows right-align their controls.
         let mut content = column![].spacing(theme::XL).width(Length::Fill);
         if let Some(e) = &self.error {
-            content = content.push(problem(e));
+            content = content.push(problem(e, &self.config.interface_language));
         }
         for tab in SettingsTab::ALL {
             let body = match tab {
@@ -46,7 +47,8 @@ impl Lightforge {
                 SettingsTab::Storage => self.storage_section(),
                 SettingsTab::About => self.about_section(),
             };
-            let body = section(tab.label(), body);
+            let title = tab.label(&self.config.interface_language);
+            let body = section(title, body);
             content = content.push(container(body).id(tab.anchor()).width(Length::Fill));
         }
         // Room to scroll the last section's heading up to where the others

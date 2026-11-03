@@ -20,14 +20,14 @@ pub async fn list_backups(layout: Layout, code: ProductCode) -> Result<Vec<backu
 }
 
 /// Back up a game's settings now, answering with the sentence to show.
-pub async fn create_backup(layout: Layout, code: ProductCode) -> Result<String, String> {
+pub async fn create_backup(layout: Layout, code: ProductCode, language: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let dirs = AppDirs::discover().map_err(|e| chain(&e))?;
         let plan = settings_backup(&layout, &dirs, &code);
         Ok(match plan.create(backup::Reason::Manual).map_err(|e| chain(&e))? {
-            Some(_) => "Backed up.".to_owned(),
-            None if plan.account_dir.is_dir() => "Nothing changed since the last backup.".to_owned(),
-            None => "Nothing to back up yet: the game has not been started.".to_owned(),
+            Some(_) => crate::i18n::text(&language, "backup-created"),
+            None if plan.account_dir.is_dir() => crate::i18n::text(&language, "backup-unchanged"),
+            None => crate::i18n::text(&language, "backup-no-game-yet"),
         })
     })
     .await
@@ -41,10 +41,11 @@ pub async fn restore_backup(
     code: ProductCode,
     archive: PathBuf,
     account: Option<String>,
+    language: String,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         if !lightforge_core::preflight::games_running(&layout).is_empty() {
-            return Err("Close the game first, it would overwrite the restore when it exits.".to_owned());
+            return Err(crate::i18n::text(&language, "backup-close-game-before-restore"));
         }
         let dirs = AppDirs::discover().map_err(|e| chain(&e))?;
         let plan = settings_backup(&layout, &dirs, &code);
@@ -52,15 +53,15 @@ pub async fn restore_backup(
         let chosen = backups
             .iter()
             .find(|b| b.path == archive)
-            .ok_or("That backup is no longer there.")?;
+            .ok_or_else(|| crate::i18n::text(&language, "backup-no-longer-exists"))?;
         match &account {
             Some(name) => {
                 plan.restore_account(chosen, name).map_err(|e| chain(&e))?;
-                Ok(format!("Restored {name} from the backup of {}.", chosen.when()))
+                Ok(crate::i18n::text_with_args(&language, "backup-restored-account", &[("account", name), ("when", &chosen.when().to_string())]))
             }
             None => {
                 plan.restore(chosen).map_err(|e| chain(&e))?;
-                Ok(format!("Restored the backup from {}.", chosen.when()))
+                Ok(crate::i18n::text_with_args(&language, "backup-restored", &[("when", &chosen.when().to_string())]))
             }
         }
     })
@@ -69,7 +70,7 @@ pub async fn restore_backup(
 }
 
 /// Delete one backup, answering with the sentence to show.
-pub async fn delete_backup(layout: Layout, code: ProductCode, archive: PathBuf) -> Result<String, String> {
+pub async fn delete_backup(layout: Layout, code: ProductCode, archive: PathBuf, language: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let dirs = AppDirs::discover().map_err(|e| chain(&e))?;
         let plan = settings_backup(&layout, &dirs, &code);
@@ -77,9 +78,9 @@ pub async fn delete_backup(layout: Layout, code: ProductCode, archive: PathBuf) 
         let chosen = backups
             .iter()
             .find(|b| b.path == archive)
-            .ok_or("That backup is no longer there.")?;
+            .ok_or_else(|| crate::i18n::text(&language, "backup-no-longer-exists"))?;
         plan.delete(chosen).map_err(|e| chain(&e))?;
-        Ok(format!("Deleted the backup from {}.", chosen.when()))
+        Ok(crate::i18n::text_with_args(&language, "backup-deleted", &[("when", &chosen.when().to_string())]))
     })
     .await
     .map_err(|e| e.to_string())?

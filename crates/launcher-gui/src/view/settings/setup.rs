@@ -12,18 +12,18 @@ impl Lightforge {
     /// not run: a launcher running a package manager as root on a guess is a
     /// trust escalation, and the systems that most need help (SteamOS,
     /// rpm-ostree, NixOS) are the ones such a button could not serve.
-    pub(crate) fn runtime_row() -> Element<'static, Message> {
+    pub(crate) fn runtime_row(language: &str) -> Element<'static, Message> {
         let remedy = lightforge_core::runtime::remedy();
 
         let mut lines = column![
-            text("32-bit runtime").size(theme::BODY),
-            mono("missing — Battle.net's installer cannot run without it".to_owned()),
+            text(i18n::text(language, "settings-setup-runtime-title")).size(theme::BODY),
+            mono(i18n::text(language, "settings-setup-runtime-missing")),
         ]
         .spacing(theme::XS);
 
         if let Some(command) = &remedy.command {
             lines = lines.push(muted(
-                format!("on {}, run:", remedy.distro),
+                i18n::text_with_args(language, "settings-setup-command-on-distro", &[("distro", &remedy.distro)]),
                 theme::CAPTION,
             ));
             lines = lines.push(mono(command.clone()));
@@ -44,14 +44,14 @@ impl Lightforge {
         if let Some(command) = remedy.command.clone() {
             actions = actions.push(
                 action_button(
-                    "Copy command",
+                    &i18n::text(language, "settings-setup-copy-command"),
                     theme::ACCENT,
                     Message::CopyRuntimeCommand(command),
                 )
                 .enabled(true),
             );
         }
-        actions = actions.push(secondary("Re-check", Message::RecheckRuntime).enabled(true));
+        actions = actions.push(secondary(&i18n::text(language, "settings-setup-recheck"), Message::RecheckRuntime).enabled(true));
 
         container(
             row![
@@ -88,11 +88,9 @@ impl Lightforge {
     }
 
     pub(crate) fn setup_steps(&self, in_wizard: bool) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let mut body = column![]
-            .extend(self.hint(
-                "Proton, the Wine prefix and Battle.net. Each step is skipped if it is \
-                 already done.",
-            ).map(Element::from))
+            .extend(self.hint(i18n::text(language, "settings-setup-intro")).map(Element::from))
             .spacing(theme::SM);
 
         // Where all three steps below install to. Only offered while nothing
@@ -105,7 +103,7 @@ impl Lightforge {
 
         let steps = match &self.setup {
             None => {
-                body = body.push(muted("checking what is installed…".to_owned(), theme::BODY));
+                body = body.push(muted(i18n::text(language, "settings-setup-checking"), theme::BODY));
                 Vec::new()
             }
             Some(status) => {
@@ -114,7 +112,7 @@ impl Lightforge {
                 // something Lightforge can do on the user's behalf. It leads
                 // the list for the same reason it blocks setup.
                 if !status.thirty_two_bit {
-                    body = body.push(Self::runtime_row());
+                    body = body.push(Self::runtime_row(language));
                 }
                 self.setup_rows(status, in_wizard)
             }
@@ -135,7 +133,7 @@ impl Lightforge {
         // failed step would look like a button that did nothing.
         if in_wizard && !self.setup_running {
             if let Some(e) = &self.error {
-                body = body.push(problem(e));
+                body = body.push(problem(e, &self.config.interface_language));
             }
         }
 
@@ -144,10 +142,11 @@ impl Lightforge {
 
     /// The install-location field and what it means, while nothing is installed.
     fn install_location(&self) -> Vec<Element<'_, Message>> {
+        let language = &self.config.interface_language;
         let mut rows = vec![setting_group([
             setting(
-                "Install location",
-                "Battle.net and the Wine prefix go here. Games can go on any drive.",
+                i18n::text(language, "settings-setup-install-location"),
+                i18n::text(language, "settings-setup-install-location-about"),
                 None,
                 row![
                     clickable(
@@ -160,22 +159,20 @@ impl Lightforge {
                             .padding(theme::SM)
                             .width(Length::Fixed(300.0)),
                     ),
-                    secondary("Use", Message::UseLocation).enabled(true),
-                    secondary("Open folder", Message::OpenLibrary).enabled(true),
+                    secondary(&i18n::text(language, "settings-setup-use"), Message::UseLocation).enabled(true),
+                    secondary(&i18n::text(language, "settings-setup-open-folder"), Message::OpenLibrary).enabled(true),
                 ]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center),
             ),
         ])];
-        rows.extend(self.hint(
-            "Battle.net and the Wine prefix are installed here, and stay here whatever \
-             drives you add later. Games can go on any drive — see Storage.",
-        ).map(Element::from));
+        rows.extend(self.hint(i18n::text(language, "settings-setup-install-location-hint")).map(Element::from));
         rows
     }
 
     /// One row per setup step, each saying whether it is done.
     fn setup_rows(&self, status: &SetupStatus, in_wizard: bool) -> Vec<Element<'_, Message>> {
+        let language = &self.config.interface_language;
         // On the Settings page the steps share one card like every other
         // group there; the wizard keeps a row apiece.
         let framed = |row: Element<'static, Message>| -> Element<'static, Message> {
@@ -185,7 +182,7 @@ impl Lightforge {
             }
         };
         let mut steps: Vec<Element<'_, Message>> = Vec::new();
-        let step = |done: bool, label: &'static str, detail: String| -> Element<'static, Message> {
+        let step = |done: bool, label: String, detail: String| -> Element<'static, Message> {
             let color = match done {
                 true => theme::OK,
                 false => theme::MUTED,
@@ -208,22 +205,22 @@ impl Lightforge {
 
         steps.push(step(
             status.proton.is_some(),
-            "Proton-GE",
+            "Proton-GE".to_owned(),
             match &status.proton {
                 Some(build) => format!(
                     "{} — {}",
                     build.version,
                     lightforge_core::setup::describe_source(build)
                 ),
-                None => "not installed".to_owned(),
+                None => i18n::text(language, "settings-setup-not-installed"),
             },
         ));
         steps.push(step(
             status.prefix.is_ready(),
-            "Wine prefix",
+            i18n::text(language, "settings-setup-wine-prefix"),
             match status.prefix.is_ready() {
                 true => tilde(&status.prefix.prefix),
-                false => "not built, or the game link is missing".to_owned(),
+                false => i18n::text(language, "settings-setup-prefix-not-built"),
             },
         ));
         // Declined at setup is not the same as missing: the user was
@@ -235,12 +232,12 @@ impl Lightforge {
                     row![
                         column![
                             text("Battle.net").size(theme::BODY),
-                            mono("skipped — World of Warcraft only".to_owned()),
+                            mono(i18n::text(language, "settings-setup-skipped-wow-only")),
                         ]
                         .spacing(theme::XS)
                         .width(Length::Fill),
                         action_button(
-                            "Install it now",
+                            &i18n::text(language, "settings-setup-install-now"),
                             theme::ACCENT,
                             Message::InstallBattleNet,
                         )
@@ -254,11 +251,11 @@ impl Lightforge {
         } else {
             steps.push(step(
                 status.battle_net,
-                "Battle.net",
+                "Battle.net".to_owned(),
                 match (status.battle_net, status.battle_net_wanted) {
                     (true, _) => tilde(&self.layout.battle_net_dir()),
-                    (false, true) => "not installed in the prefix".to_owned(),
-                    (false, false) => "skipped — World of Warcraft only".to_owned(),
+                    (false, true) => i18n::text(language, "settings-setup-not-installed-prefix"),
+                    (false, false) => i18n::text(language, "settings-setup-skipped-wow-only"),
                 },
             ));
         }
@@ -285,14 +282,15 @@ impl Lightforge {
     /// The button that runs setup, and on the Settings page the two that
     /// reopen the wizard.
     fn setup_actions(&self, in_wizard: bool) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let ready = self.setup.as_ref().is_some_and(|s| s.is_ready());
         let label = match (self.setup_running, ready) {
-            (true, _) => "Working…",
-            (false, true) => "Re-run setup",
-            (false, false) => "Set up Lightforge",
+            (true, _) => i18n::text(language, "settings-setup-working"),
+            (false, true) => i18n::text(language, "settings-setup-rerun"),
+            (false, false) => i18n::text(language, "settings-setup-button"),
         };
         let start = action_button(
-            label,
+            &label,
             match ready {
                 true => theme::PAUSE,
                 false => theme::INSTALL,
@@ -309,7 +307,7 @@ impl Lightforge {
             // be a button that reopens the thing you are looking at.
             .extend((!in_wizard).then(|| {
                 Element::from(
-                    secondary("Run the setup wizard", Message::Wizard(wizard::Msg::Open))
+                    secondary(&i18n::text(language, "settings-setup-run-wizard"), Message::Wizard(wizard::Msg::Open))
                         .enabled(!self.setup_running),
                 )
             }))
@@ -317,7 +315,7 @@ impl Lightforge {
             // without walking through region and drives again.
             .extend((!in_wizard).then(|| {
                 Element::from(
-                    secondary("Look for games", Message::Wizard(wizard::Msg::Scan))
+                    secondary(&i18n::text(language, "settings-setup-look-for-games"), Message::Wizard(wizard::Msg::Scan))
                         .enabled(!self.setup_running),
                 )
             }))

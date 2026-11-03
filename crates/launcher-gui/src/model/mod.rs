@@ -183,14 +183,6 @@ pub(crate) enum HandoffAct {
 }
 
 impl HandoffAct {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Play => "Play via Battle.net",
-            Self::Install => "Install via Battle.net",
-            Self::OpenClient => "Open Battle.net",
-        }
-    }
-
     /// Blue means ready to play, and only that.
     ///
     /// Installing is filled but neutral; `None` (just open the client) is outlined.
@@ -199,27 +191,6 @@ impl HandoffAct {
             Self::Play => Some(theme::ACCENT),
             Self::Install => Some(theme::PAUSE),
             Self::OpenClient => None,
-        }
-    }
-
-    /// What the button will really do, for the hints mode.
-    pub(crate) fn hint(self) -> &'static str {
-        match self {
-            Self::Play => {
-                "Lightforge starts Battle.net, waits for it to sign in, tells it to launch \
-                 this game, and holds here until the game exits. Battle.net installs and \
-                 updates it; Lightforge never touches its files."
-            }
-            Self::Install => {
-                "Lightforge opens Battle.net's install dialog for this game, where you \
-                 choose the location and start it. The install is Battle.net's own \
-                 — this panel shows Play once its registry lists the game."
-            }
-            Self::OpenClient => {
-                "No game family is known for this product, so the client cannot be told \
-                 which tile to open — naming the wrong one lands on somebody else's game. \
-                 This opens Battle.net and stops there."
-            }
         }
     }
 

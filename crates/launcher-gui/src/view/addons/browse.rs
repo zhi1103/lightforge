@@ -5,30 +5,26 @@ use iced::widget::column;
 
 impl Lightforge {
     pub(crate) fn addons_browse(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let search = container(
             column![
                 row![
                     clickable(
                         "addon search",
-                        text_input("Search addons, or paste a project page URL…", &self.search_input)
+                        text_input(&i18n::text(language, "addons-search-placeholder"), &self.search_input)
                             .on_input(Message::SearchChanged)
                             .on_submit(Message::RunSearch)
                             .style(theme::field)
                             .size(theme::BODY)
                             .padding(theme::SM),
                     ),
-                    action_button("Search", theme::ACCENT, Message::RunSearch)
+                    action_button(&i18n::text(language, "addons-search"), theme::ACCENT, Message::RunSearch)
                         .enabled(!self.searching && !self.search_input.trim().is_empty()),
                 ]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center),
             ]
-            .extend(self.hint(
-                "WoWInterface, Tukui and GitHub (type owner/repo). CurseForge needs a \
-                 catalog in Settings. A pasted CurseForge, GitHub, WoWInterface or Tukui \
-                 page is looked up at that provider — it installs the same way as a \
-                 search hit, so a dead link says so rather than failing oddly.",
-            ).map(Element::from))
+            .extend(self.hint(i18n::text(language, "addons-search-hint")).map(Element::from))
             .spacing(theme::SM),
         )
         .padding(theme::MD)
@@ -44,18 +40,16 @@ impl Lightforge {
         body = body.extend(self.unavailable_rows(AddonTab::Browse));
 
         if self.searching {
-            body = body.push(muted("searching…".to_owned(), theme::BODY));
+            body = body.push(muted(i18n::text(language, "addons-searching"), theme::BODY));
         } else if self.search.listings.is_empty() {
             body = body.push(match self.search.query.is_empty() {
                 true => empty(
-                    "Search for an addon.",
-                    "The most-downloaded addons show here once the catalogue has been \
-                     fetched. Results come from WoWInterface and Tukui; type owner/repo \
-                     for GitHub, or paste an addon's page URL.",
+                    &i18n::text(language, "addons-search-empty"),
+                    &i18n::text(language, "addons-search-most-downloaded-empty"),
                 ),
                 false => empty(
-                    &format!("Nothing found for “{}”.", self.search.query),
-                    "It may be a CurseForge addon, which needs a catalog configured.",
+                    &i18n::text_with_args(language, "addons-search-no-results", &[("query", &self.search.query)]),
+                    &i18n::text(language, "addons-search-needs-catalog"),
                 ),
             });
         }
@@ -63,7 +57,7 @@ impl Lightforge {
         // Said once, above the rows: a list nobody asked for has to explain
         // what it is, or it reads as the results of a search that went wrong.
         if self.search.query.is_empty() && !self.search.listings.is_empty() {
-            body = body.push(muted("Most downloaded".to_owned(), theme::LABEL));
+            body = body.push(muted(i18n::text(language, "addons-most-downloaded"), theme::LABEL));
         }
 
         let installed_ids: Vec<(&str, &str)> = self
@@ -95,10 +89,10 @@ impl Lightforge {
                 muted(
                     format!(
                         "{}{}",
-                        listing.author.as_deref().unwrap_or("unknown author"),
+                        listing.author.as_deref().unwrap_or(&i18n::text(language, "addons-unknown-author")),
                         match listing.downloads {
                             0 => String::new(),
-                            n => format!(" · {} downloads", downloads_of(n)),
+                            n => format!(" · {}", i18n::text_with_args(language, "addons-download-count", &[("count", &downloads_of(n))])),
                         }
                     ),
                     theme::CAPTION,
@@ -107,8 +101,8 @@ impl Lightforge {
             .spacing(theme::XS);
             if listing.opted_out {
                 info = info.push(opted_out_note(match listing.github {
-                    Some(_) => "the author has disabled third-party downloads, but publishes it on GitHub",
-                    None => "the author has disabled third-party downloads",
+                    Some(_) => i18n::text(language, "addons-github-downloads-disabled"),
+                    None => i18n::text(language, "addons-third-party-downloads-disabled"),
                 }));
             }
             let mut line = row![info].spacing(theme::SM).align_y(Alignment::Center);
@@ -122,26 +116,26 @@ impl Lightforge {
                         listing.id.clone(),
                         listing.name.clone(),
                     );
-                    line = line.push(secondary("Details", open).enabled(true));
+                    line = line.push(secondary(&i18n::text(language, "addons-details"), open).enabled(true));
                 }
                 false => {
                     if let Some(url) = &listing.website_url {
                         line = line
-                            .push(secondary("Page", Message::OpenUrl(url.clone())).enabled(true));
+                            .push(secondary(&i18n::text(language, "addons-page"), Message::OpenUrl(url.clone())).enabled(true));
                     }
                 }
             }
             line = line.push(match (already, listing.opted_out, &listing.github) {
-                (true, ..) => tag("Installed".to_owned(), theme::OK),
+                (true, ..) => tag(i18n::text(language, "common-installed"), theme::OK),
                 (false, true, Some(repo)) => action_button(
-                    "Get it from GitHub",
+                    &i18n::text(language, "menu-addon-get-from-github"),
                     theme::INSTALL,
                     Message::InstallAddon("github".to_owned(), repo.clone()),
                 )
                 .enabled(!self.addons_locked()),
-                (false, true, None) => tag("Page only".to_owned(), theme::MUTED),
+                (false, true, None) => tag(i18n::text(language, "addons-page-only"), theme::MUTED),
                 (false, false, _) => action_button(
-                    "Install",
+                    &i18n::text(language, "dialog-start-install"),
                     theme::INSTALL,
                     Message::InstallAddon(provider.clone(), listing.id.clone()),
                 )

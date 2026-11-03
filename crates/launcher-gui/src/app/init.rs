@@ -2,6 +2,10 @@
 
 use crate::*;
 
+fn initial_status(language: &str) -> String {
+    i18n::text(language, "status-checking").to_owned()
+}
+
 impl Lightforge {
     /// The state the first frame draws: the config, the layout it resolves
     /// to, and everything built from those. Nothing is started here.
@@ -9,20 +13,21 @@ impl Lightforge {
         let dirs = AppDirs::discover().ok();
         // Missing: a first run. Unloadable: stop, not save defaults over it.
         let loaded = dirs.as_ref().map(|d| Config::load_or_default(&d.config_file()));
+        let mut config = match loaded.as_ref() {
+            Some(Ok(config)) => config.clone(),
+            _ => Config::with_default_products(),
+        };
         let config_error = match (&loaded, dirs.as_ref()) {
             (Some(Err(e)), Some(dirs)) => {
                 tracing::error!("{} will not load: {}", dirs.config_file().display(), chain(e));
-                Some(broken_config(e, &dirs.config_file()))
+                Some(broken_config(e, &dirs.config_file(), &config.interface_language))
             }
             _ => None,
-        };
-        let mut config = match loaded {
-            Some(Ok(config)) => config,
-            _ => Config::with_default_products(),
         };
         // Seeded for an older config, not saved (`Config::ensure_libraries`).
         let _ = config.ensure_libraries();
         let config = config;
+        let status = initial_status(&config.interface_language);
         // Honours `blizzard_root`, the same way the CLI does.
         let layout = config.layout().unwrap_or_else(|e| {
             tracing::error!("could not resolve the Blizzard root, using the current directory: {}", chain(&e));
@@ -132,7 +137,7 @@ impl Lightforge {
             awake: Awake::Off,
             downloads: SharedDownloads::default(),
             busy: false,
-            status: "checking…".to_owned(),
+            status,
             error: None,
             closing: None,
             screen: Screen::Dashboard,
@@ -287,5 +292,16 @@ impl Lightforge {
             artwork,
             iced::system::information().map(|info| Message::SystemInfo(Box::new(info))),
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::initial_status;
+
+    #[test]
+    fn initial_dashboard_status_uses_the_selected_interface_language() {
+        assert_eq!(initial_status(crate::i18n::ENGLISH), "checking…");
+        assert_eq!(initial_status(crate::i18n::CHINESE), "正在检查…");
     }
 }

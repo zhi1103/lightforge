@@ -20,7 +20,7 @@ impl Lightforge {
                     &format!("{action:?}"),
                     tasks::proton_for(&self.selected.code).as_ref(),
                 );
-                self.status = "debug info copied".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-debug-info-copied").to_owned();
                 iced::clipboard::write(info.render())
             }
 
@@ -42,7 +42,7 @@ impl Lightforge {
                 let Diagnostics::Done(checks) = &self.diagnostics else {
                     return Ok(Task::none());
                 };
-                self.status = "diagnostics copied".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-diagnostics-copied").to_owned();
                 iced::clipboard::write(lightforge_core::doctor::render(checks))
             }
 
@@ -175,29 +175,34 @@ impl Lightforge {
     /// The screenshot attached to a report.
     fn update_report_screenshot(&mut self, message: Message) -> Result<Task<Message>, Message> {
         Ok(match message {
-            Message::ReportShotPick => Task::perform(
-                // The XDG portal through `ashpd`: `rfd`'s `libdbus` call never
-                // returns in this process (it works from a test binary).
-                async {
-                    let request = ashpd::desktop::file_chooser::OpenFileRequest::default()
-                        .title("Choose a screenshot")
-                        .modal(true)
-                        .multiple(false)
-                        .filter(
-                            ashpd::desktop::file_chooser::FileFilter::new("Images")
-                                .mimetype("image/png")
-                                .mimetype("image/jpeg")
-                                .mimetype("image/webp")
-                                .mimetype("image/bmp"),
-                        );
+            Message::ReportShotPick => {
+                let language = self.config.interface_language.clone();
+                let title = i18n::text(&language, "report-choose-screenshot");
+                let filter = i18n::text(&language, "report-image-filter");
+                Task::perform(
+                    // The XDG portal through `ashpd`: `rfd`'s `libdbus` call never
+                    // returns in this process (it works from a test binary).
+                    async move {
+                        let request = ashpd::desktop::file_chooser::OpenFileRequest::default()
+                            .title(title.as_str())
+                            .modal(true)
+                            .multiple(false)
+                            .filter(
+                                ashpd::desktop::file_chooser::FileFilter::new(&filter)
+                                    .mimetype("image/png")
+                                    .mimetype("image/jpeg")
+                                    .mimetype("image/webp")
+                                    .mimetype("image/bmp"),
+                            );
 
-                    let files = request.send().await.ok()?.response().ok()?;
-                    // Cancel is an empty list. `to_file_path`: `path` is still
-                    // percent-encoded.
-                    files.uris().first().and_then(|uri| uri.to_file_path().ok())
-                },
-                Message::ReportShotPicked,
-            ),
+                        let files = request.send().await.ok()?.response().ok()?;
+                        // Cancel is an empty list. `to_file_path`: `path` is still
+                        // percent-encoded.
+                        files.uris().first().and_then(|uri| uri.to_file_path().ok())
+                    },
+                    Message::ReportShotPicked,
+                )
+            }
 
             Message::ReportShotPicked(path) => {
                 // Cancelling is the common answer and means nothing happened.
@@ -220,7 +225,7 @@ impl Lightforge {
                             dialog.shot = Some(*shot);
                         }
                     }
-                    Err(e) => self.status = format!("that file is not a screenshot: {e}"),
+                    Err(e) => self.status = i18n::text_with_args(&self.config.interface_language, "report-screenshot-error", &[("error", &e)]),
                 }
                 Task::none()
             }
@@ -249,7 +254,7 @@ impl Lightforge {
                     text.push('\n');
                     text.push_str(&dialog.debug);
                 }
-                self.status = "report copied".to_owned();
+                self.status = i18n::text(&self.config.interface_language, "status-report-copied").to_owned();
                 iced::clipboard::write(text)
             }
 

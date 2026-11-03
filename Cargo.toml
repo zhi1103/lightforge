@@ -16,6 +16,8 @@ homepage = "https://github.com/LightforgeProject/lightforge"
 
 [workspace.dependencies]
 lightforge-core = { path = "crates/core" }
+fluent-bundle = "=0.16.0"
+unic-langid = "0.9"
 
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

@@ -5,6 +5,7 @@ use iced::widget::column;
 
 impl Lightforge {
     pub(crate) fn addons_mine(&self) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         let outdated = self.updates.iter().filter(|u| u.has_update()).count();
 
         let mut body = column![self.mine_toolbar(outdated)].spacing(theme::SM);
@@ -24,7 +25,7 @@ impl Lightforge {
         // A header, because four right-hand columns of bare dates are not
         // self-describing. Indented and spaced to match a row's own columns.
         if !self.addons.rows.is_empty() {
-            body = body.push(mine_header());
+            body = body.push(mine_header(language));
         }
 
         // Two providers writing one folder undo each other's updates.
@@ -48,8 +49,8 @@ impl Lightforge {
 
         if self.addons.rows.is_empty() {
             body = body.push(empty(
-                "No addons installed.",
-                "Find one under Browse Addons, or bring your collection over under Import.",
+                &i18n::text(language, "addons-mine-empty"),
+                &i18n::text(language, "addons-mine-empty-hint"),
             ));
         }
 
@@ -75,8 +76,8 @@ impl Lightforge {
 
         if !needle.is_empty() && shown.is_empty() && !self.addons.rows.is_empty() {
             body = body.push(empty(
-                &format!("No installed addon matches “{}”.", self.addon_filter.trim()),
-                "Clear the filter to see everything again.",
+                &i18n::text_with_args(language, "addons-mine-no-filter-match", &[("filter", self.addon_filter.trim())]),
+                &i18n::text(language, "addons-mine-clear-filter-hint"),
             ));
         }
 
@@ -92,6 +93,7 @@ impl Lightforge {
 
     /// The filter, the update count, and the three buttons over the list.
     fn mine_toolbar(&self, outdated: usize) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         // Skipped by the check and by Update all; said, or a ledger of pins
         // reads as "no updates" (#31).
         let pinned = self
@@ -102,22 +104,22 @@ impl Lightforge {
             .count();
         let checked = match (self.updates.is_empty(), outdated) {
             (true, _) => None,
-            (false, 0) if pinned > 0 => Some("the rest is up to date".to_owned()),
-            (false, 0) => Some("everything is up to date".to_owned()),
-            (false, n) => Some(format!("{n} have updates")),
+            (false, 0) if pinned > 0 => Some(i18n::text(language, "addons-rest-up-to-date")),
+            (false, 0) => Some(i18n::text(language, "addons-everything-up-to-date")),
+            (false, n) => Some(i18n::text_with_args(language, "addons-updates-available", &[("count", &n.to_string())])),
         };
         let summary = match (checked, pinned) {
             (None, _) => String::new(),
             (Some(checked), 0) => checked,
-            (Some(_), n) if n == self.addons.managed => format!("{n} pinned, not checked"),
-            (Some(checked), n) => format!("{n} pinned, not checked; {checked}"),
+            (Some(_), n) if n == self.addons.managed => i18n::text_with_args(language, "addons-pinned-not-checked", &[("count", &n.to_string())]),
+            (Some(checked), n) => i18n::text_with_args(language, "addons-pinned-and-checked", &[("count", &n.to_string()), ("checked", &checked)]),
         };
         container(
             row![
                 // Sized, or it reads as a search.
                 clickable(
                     "addon filter",
-                    text_input("Filter installed addons…", &self.addon_filter)
+                    text_input(&i18n::text(language, "addons-filter-placeholder"), &self.addon_filter)
                         .on_input(Message::AddonFilterChanged)
                         .style(theme::field)
                         .size(theme::BODY)
@@ -127,15 +129,15 @@ impl Lightforge {
                 Space::new().width(Length::Fill),
                 muted(summary, theme::LABEL),
                 // One shape for the three; blue is the one to press.
-                action_button("Check for updates", theme::PAUSE, Message::CheckAddonUpdates)
+                action_button(&i18n::text(language, "addons-check-updates"), theme::PAUSE, Message::CheckAddonUpdates)
                     .enabled(!self.addons_locked() && self.addons.managed > 0),
-                action_button("Update all", theme::ACCENT, Message::UpdateAddons)
+                action_button(&i18n::text(language, "addons-update-all"), theme::ACCENT, Message::UpdateAddons)
                     .enabled(!self.addons_locked() && self.addons.managed > 0),
-                action_button("Open folder", theme::PAUSE, Message::OpenAddonsDir)
+                action_button(&i18n::text(language, "settings-storage-open-folder"), theme::PAUSE, Message::OpenAddonsDir)
                     .enabled(true),
             ]
             .push((pinned > 0).then(|| {
-                secondary("Unpin all", Message::UnpinAddons).enabled(!self.addons_locked())
+                secondary(&i18n::text(language, "addons-unpin-all"), Message::UnpinAddons).enabled(!self.addons_locked())
             }))
             .spacing(theme::SM)
             .align_y(Alignment::Center),
@@ -147,24 +149,23 @@ impl Lightforge {
 
     /// The offer to take in addons installed by hand.
     fn adopt_offer(&self, unmanaged: usize) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
         container(
             row![
                 column![
                     text(match unmanaged {
-                        1 => "1 addon was installed by hand".to_owned(),
-                        n => format!("{n} addons were installed by hand"),
+                        1 => i18n::text(language, "addons-manual-one"),
+                        n => i18n::text_with_args(language, "addons-manual-many", &[("count", &n.to_string())]),
                     })
                     .size(theme::BODY),
                     muted(
-                        "Lightforge can recognise them by their contents and \
-                         manage them from here — updates, channels and all."
-                            .to_owned(),
+                        i18n::text(language, "addons-recognise-about"),
                         theme::CAPTION,
                     ),
                 ]
                 .spacing(theme::XS)
                 .width(Length::Fill),
-                action_button("Recognise them", theme::ACCENT, Message::AdoptAddons)
+                action_button(&i18n::text(language, "addons-recognise"), theme::ACCENT, Message::AdoptAddons)
                     .enabled(!self.addons_locked()),
             ]
             .spacing(theme::SM)
@@ -178,6 +179,7 @@ impl Lightforge {
     /// One installed addon: its name and state, the three dated columns,
     /// and what can be done to it.
     fn mine_row<'a>(&'a self, addon: &'a addonwork::Row) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let extra = self
             .addons
             .rows
@@ -200,9 +202,9 @@ impl Lightforge {
             self.addon_heading(addon, status),
             muted(
                 match (&addon.managed, extra) {
-                    (Some(m), 0) => format!("{} · managed", m.provider),
-                    (Some(m), n) => format!("{} · managed · +{n} folders", m.provider),
-                    (None, _) => "installed by hand".to_owned(),
+                    (Some(m), 0) => i18n::text_with_args(language, "addons-managed-provider", &[("provider", &m.provider)]),
+                    (Some(m), n) => i18n::text_with_args(language, "addons-managed-provider-folders", &[("provider", &m.provider), ("count", &n.to_string())]),
+                    (None, _) => i18n::text(language, "addons-installed-by-hand"),
                 },
                 theme::CAPTION,
             ),
@@ -212,8 +214,8 @@ impl Lightforge {
         for dep in missing {
             words = words.push(
                 row![
-                    text(format!("needs {dep}, which is not installed")).size(theme::CAPTION).color(theme::WARN),
-                    secondary("Find", Message::FindAddon(dep.clone())).enabled(true),
+                    text(i18n::text_with_args(language, "addons-needs-dependency", &[("dependency", dep)])).size(theme::CAPTION).color(theme::WARN),
+                    secondary(&i18n::text(language, "addons-find"), Message::FindAddon(dep.clone())).enabled(true),
                 ]
                 .spacing(theme::SM)
                 .align_y(Alignment::Center),
@@ -263,6 +265,7 @@ impl Lightforge {
         addon: &'a addonwork::Row,
         status: Option<&'a lightforge_core::addons::manage::UpdateStatus>,
     ) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let mut heading = row![text(addon.title.clone()).size(theme::BODY), mono(addon.version.clone())]
             .spacing(theme::SM)
             .align_y(Alignment::Center);
@@ -270,34 +273,31 @@ impl Lightforge {
             // Said once, in the place an update would be announced: this
             // row is why "Update all" leaves something behind.
             Some(m) if m.ignored => {
-                heading = heading.push(pill("ignored".to_owned(), theme::MUTED));
+                heading = heading.push(pill(i18n::text(language, "addons-ignored"), theme::MUTED));
             }
             // The version it is held at is already beside the title, so
             // the pill says the state and not the number twice.
             Some(m) if m.pinned.is_some() => {
-                heading = heading.push(pill("pinned".to_owned(), theme::MUTED));
+                heading = heading.push(pill(i18n::text(language, "addons-pinned"), theme::MUTED));
             }
             // Only when it differs from the default.
             Some(m) if !m.auto_update.unwrap_or(self.config.addon_auto_update) => {
-                heading = heading.push(pill("manual".to_owned(), theme::MUTED));
+                heading = heading.push(pill(i18n::text(language, "addons-manual"), theme::MUTED));
             }
             _ => {}
         }
         // What the game would say about it, which an update may not change.
         if addon.out_of_date {
-            heading = heading.push(pill("out of date".to_owned(), theme::WARN));
+            heading = heading.push(pill(i18n::text(language, "addons-out-of-date"), theme::WARN));
         }
         if let Some(status) = status.filter(|s| s.has_update()) {
             // The provider's version name; a channel switch says so instead.
             heading = heading.push(match status.is_channel_switch() {
                 true => pill(
-                    format!(
-                        "{} build",
-                        status
-                            .available_build
-                            .map(|c| c.as_str())
-                            .unwrap_or("different"),
-                    ),
+                    i18n::text_with_args(language, "addons-build-label", &[(
+                        "build",
+                        status.available_build.map(|c| c.as_str()).unwrap_or("different"),
+                    )]),
                     theme::ACCENT,
                 ),
                 false => pill(
@@ -324,14 +324,15 @@ impl Lightforge {
         managed: &'a addonwork::Managed,
         status: Option<&'a lightforge_core::addons::manage::UpdateStatus>,
     ) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let mut actions = row![].spacing(theme::SM).align_y(Alignment::Center);
         // Which builds this addon accepts: first, fixed width, button height.
         actions = actions.push(self.picker(
             format!("channel {} {}", managed.provider, managed.id),
-            RowChannel::ALL.to_vec(),
-            Some(RowChannel(managed.channel)),
+            RowChannel::ALL.map(|choice| DisplayChoice(choice, choice.label(language))).to_vec(),
+            Some(DisplayChoice(RowChannel(managed.channel), RowChannel(managed.channel).label(language))),
             "",
-            |choice| Message::AddonChannelFor(managed.provider.clone(), managed.id.clone(), choice),
+            |choice| Message::AddonChannelFor(managed.provider.clone(), managed.id.clone(), choice.0),
             Length::Fixed(120.0),
             theme::LABEL,
         ));
@@ -349,12 +350,12 @@ impl Lightforge {
             // back to stable from an alpha installs an *older* build,
             // which is right, but not what the word promises.
             let label = match status.is_channel_switch() {
-                true => "Switch",
-                false => "Update",
+                true => i18n::text(language, "addons-switch-channel"),
+                false => i18n::text(language, "addons-update"),
             };
             actions = actions.push(
                 action_button(
-                    label,
+                    &label,
                     theme::UPDATE,
                     Message::InstallAddon(
                         managed.provider.clone(),
@@ -378,7 +379,7 @@ impl Lightforge {
             true => actions
                 .push(
                     action_button(
-                        "Delete",
+                        &i18n::text(language, "common-delete"),
                         theme::ERROR,
                         Message::RemoveAddon(
                             managed.provider.clone(),
@@ -388,11 +389,11 @@ impl Lightforge {
                     .keyed(remove, !self.addons_locked()),
                 )
                 .push(
-                    secondary("Keep", Message::CancelRemoveAddon).enabled(true),
+                    secondary(&i18n::text(language, "addons-keep"), Message::CancelRemoveAddon).enabled(true),
                 ),
             false => actions.push(
                 secondary(
-                    "Remove",
+                    &i18n::text(language, i18n::COMMON_REMOVE),
                     Message::ArmRemoveAddon(
                         managed.provider.clone(),
                         managed.id.clone(),
@@ -432,13 +433,13 @@ impl Lightforge {
 }
 
 /// The column names over the list, indented and spaced to match a row.
-fn mine_header() -> Element<'static, Message> {
+fn mine_header(language: &str) -> Element<'static, Message> {
     container(
         row![
-            muted("NAME".to_owned(), theme::CAPTION).width(Length::Fill),
-            column_head("LATEST"),
-            column_head("RELEASED"),
-            column_head("INSTALLED"),
+            muted(crate::i18n::text(language, "addons-column-name"), theme::CAPTION).width(Length::Fill),
+            column_head(&crate::i18n::text(language, "addons-column-latest")),
+            column_head(&crate::i18n::text(language, "addons-column-released")),
+            column_head(&crate::i18n::text(language, "addons-column-installed")),
             // Standing in for the controls each row carries, so
             // the three headings sit over their own columns,
             // not over the buttons.

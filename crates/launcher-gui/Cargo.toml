@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 lightforge-core.workspace = true
+fluent-bundle.workspace = true
 futures-util.workspace = true
 gilrs.workspace = true
 iced.workspace = true
@@ -30,6 +31,7 @@ sentry.workspace = true
 # screenshot it just uploaded now lives.
 serde.workspace = true
 tracing.workspace = true
+unic-langid.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 
 # ---------------------------------------------------------------------------

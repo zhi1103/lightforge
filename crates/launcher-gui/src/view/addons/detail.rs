@@ -9,6 +9,7 @@ impl Lightforge {
     ///
     /// Tabs: under a long description the changelog would be lost.
     pub(crate) fn detail_card<'a>(&'a self, detail: &'a AddonDetail) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let title = detail
             .loaded
             .as_ref()
@@ -21,7 +22,7 @@ impl Lightforge {
         if let Some(loaded) = &detail.loaded {
             if loaded.project.download_count > 0 {
                 head = head.push(muted(
-                    format!("{} downloads", downloads_of(loaded.project.download_count)),
+                    i18n::text_with_args(language, "addons-download-count", &[("count", &downloads_of(loaded.project.download_count))]),
                     theme::CAPTION,
                 ));
             }
@@ -34,7 +35,7 @@ impl Lightforge {
         if let Some(loaded) = &detail.loaded {
             if !loaded.project.authors.is_empty() {
                 body = body.push(muted(
-                    format!("by {}", loaded.project.authors.join(", ")),
+                    i18n::text_with_args(language, "addons-authors", &[("authors", &loaded.project.authors.join(", "))]),
                     theme::CAPTION,
                 ));
             }
@@ -45,12 +46,12 @@ impl Lightforge {
 
         match (&detail.loaded, &detail.problem) {
             (None, None) => {
-                body = body.push(muted("asking the catalogue…".to_owned(), theme::BODY));
+                body = body.push(muted(i18n::text(language, "dialog-asking-catalogue"), theme::BODY));
             }
             (_, Some(problem)) => {
                 body = body.push(empty(
-                    problem.as_str(),
-                    "Only CurseForge publishes a description and a changelog.",
+                    &i18n::error_text(language, problem),
+                    &i18n::text(language, "addon-detail-only-curseforge"),
                 ));
             }
             (Some(loaded), None) => {
@@ -64,7 +65,7 @@ impl Lightforge {
 
         let mut footer = row![Space::new().width(Length::Fill)].spacing(theme::SM);
         if let Some(url) = detail.loaded.as_ref().and_then(|d| d.project.website_url.clone()) {
-            footer = footer.push(secondary("Open the page", Message::OpenUrl(url)).enabled(true));
+            footer = footer.push(secondary(&i18n::text(language, "addon-detail-open-page"), Message::OpenUrl(url)).enabled(true));
         }
         // As in the installed row's menu.
         if let Some(url) = detail
@@ -73,7 +74,7 @@ impl Lightforge {
             .and_then(|d| d.project.source_url.clone().or_else(|| d.project.author_url.clone()))
         {
             footer =
-                footer.push(secondary("Support the author", Message::OpenUrl(url)).enabled(true));
+                footer.push(secondary(&i18n::text(language, "menu-addon-support-author"), Message::OpenUrl(url)).enabled(true));
         }
         let project = detail.loaded.as_ref().map(|d| &d.project);
         let opted_out = project.is_some_and(|p| p.opted_out);
@@ -84,10 +85,8 @@ impl Lightforge {
         if opted_out {
             body = body.push(
                 text(match github {
-                    Some(_) => "The author has disabled third-party downloads from CurseForge. \
-                                They publish it on GitHub too, which is where Lightforge can get it.",
-                    None => "The author has disabled third-party downloads. It can only be \
-                             installed from the project page.",
+                    Some(_) => i18n::text(language, "addon-detail-opted-out-github"),
+                    None => i18n::text(language, "addon-detail-opted-out-page"),
                 })
                 .size(theme::LABEL)
                 .color(theme::UPDATE),
@@ -97,7 +96,7 @@ impl Lightforge {
             let install: Option<Element<'static, Message>> = match (opted_out, github) {
                 (false, _) => Some(
                     action_button(
-                        "Install",
+                        &i18n::text(language, "dialog-start-install"),
                         theme::INSTALL,
                         Message::InstallAddon(detail.provider.clone(), detail.id.clone()),
                     )
@@ -105,7 +104,7 @@ impl Lightforge {
                 ),
                 (true, Some(repo)) => Some(
                     action_button(
-                        "Get it from GitHub",
+                        &i18n::text(language, "menu-addon-get-from-github"),
                         theme::INSTALL,
                         Message::InstallAddon("github".to_owned(), repo),
                     )
@@ -117,7 +116,7 @@ impl Lightforge {
                 footer = footer.push(install);
             }
         }
-        footer = footer.push(secondary("Close", Message::CloseAddonDetail).enabled(true));
+        footer = footer.push(secondary(&i18n::text(language, "common-close"), Message::CloseAddonDetail).enabled(true));
         body = body.push(footer);
 
         container(container(body).padding(theme::LG).style(theme::floating))
@@ -134,9 +133,10 @@ impl Lightforge {
         detail: &'a AddonDetail,
         loaded: &'a addonwork::Detail,
     ) -> Element<'a, Message> {
-        let tab = |label: String, which: DetailTab, available: bool| {
+        let language = &self.config.interface_language;
+        let tab = |id: &'static str, label: String, which: DetailTab, available: bool| {
             let selected = detail.tab == which;
-            let key = format!("detail tab {label}");
+            let key = format!("detail tab {id}");
             let tab = button(text(label).size(theme::BODY))
                 .padding([theme::XS, theme::MD])
                 .style(match selected {
@@ -147,17 +147,19 @@ impl Lightforge {
         };
 
         let changelog_label = match &loaded.changelog_build {
-            Some(build) => format!("What changed in {build}"),
-            None => "What changed".to_owned(),
+            Some(build) => i18n::text_with_args(language, "addon-detail-changelog-version", &[("version", build)]),
+            None => i18n::text(language, "addon-detail-changelog"),
         };
         row![
             tab(
+                "changelog",
                 changelog_label,
                 DetailTab::Changelog,
                 loaded.changelog.as_ref().is_some_and(|d| !d.is_empty()),
             ),
             tab(
-                "About".to_owned(),
+                "about",
+                i18n::text(language, "addon-detail-about"),
                 DetailTab::About,
                 loaded.description.as_ref().is_some_and(|d| !d.is_empty()),
             ),
@@ -172,19 +174,20 @@ impl Lightforge {
         detail: &'a AddonDetail,
         loaded: &'a addonwork::Detail,
     ) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let (document, missing) = match detail.tab {
             DetailTab::Changelog => (
                 loaded.changelog.as_ref(),
-                "This build ships no changelog — plenty of authors never write one.",
+                "addon-detail-no-changelog",
             ),
             DetailTab::About => (
                 loaded.description.as_ref(),
-                "This addon has no description beyond its summary.",
+                "addon-detail-no-description",
             ),
         };
 
         let Some(document) = document.filter(|d| !d.is_empty()) else {
-            return empty(missing, "The CurseForge page has whatever else there is.");
+            return empty(&i18n::text(language, missing), &i18n::text(language, "addon-detail-curseforge-more"));
         };
 
         let mut content = column![].spacing(theme::SM);
@@ -193,7 +196,7 @@ impl Lightforge {
         }
         if document.truncated {
             content = content.push(muted(
-                "This is longer than Lightforge shows — the rest is on the page.".to_owned(),
+                i18n::text(language, "addon-detail-truncated"),
                 theme::CAPTION,
             ));
         }

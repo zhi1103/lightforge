@@ -6,32 +6,29 @@ use iced::widget::column;
 impl Lightforge {
     /// The install dialog's card.
     pub(crate) fn install_card<'a>(&'a self, dialog: &'a InstallDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let mut drives = column![].spacing(theme::SM);
         for (index, target) in dialog.targets.iter().enumerate() {
-            drives = drives.push(install_target_row(index, target, index == dialog.chosen));
+            drives = drives.push(install_target_row(index, target, index == dialog.chosen, language));
         }
         let location: Element<Message> = column![drives]
             .extend(
-                self.hint(
-                    "World of Warcraft is installed in a folder of its own on the drive you \
-                     pick. Every WoW version you later put on the same drive shares its game \
-                     data; one on another drive is a separate install.",
-                )
+                self.hint(i18n::text(language, "dialog-install-location-hint"))
                 .map(Element::from),
             )
             .spacing(theme::XS)
             .into();
 
-        let mut body = column![field_row("Install to".to_owned(), location)].spacing(theme::MD);
+        let mut body = column![field_row(i18n::text(language, "wizard-install-to"), location)].spacing(theme::MD);
 
         let mut ready = false;
         match &dialog.stage {
             DialogStage::Calculating => {
-                body = body.push(muted("Calculating size…".to_owned(), theme::LABEL));
+                body = body.push(muted(i18n::text(language, "dialog-calculating-size"), theme::LABEL));
             }
             DialogStage::Failed(e) => {
                 body = body.push(
-                    text(format!("⚠ Could not read this build: {e}"))
+                    text(format!("⚠ {}: {e}", i18n::text(language, "dialog-build-read-failed")))
                         .size(theme::LABEL)
                         .color(theme::ERROR),
                 );
@@ -48,12 +45,12 @@ impl Lightforge {
                     .filter(|bytes| *bytes > 0);
                 if let Some(extra) = extra {
                     body = body.push(field_row(
-                        "Optional".to_owned(),
+                        i18n::text(language, "dialog-optional"),
                         row![
                             clickable(
                                 "high res",
                                 tick(dialog.high_res)
-                                    .label(optional_label(HIGH_RES))
+                                    .label(optional_label(HIGH_RES, &self.config.interface_language))
                                     .on_toggle(Message::InstallHighRes)
                                     .text_size(theme::tap_text(theme::BODY)),
                             ),
@@ -73,19 +70,19 @@ impl Lightforge {
                 // executables and the like) come on top, which is most of
                 // why Battle.net's "required" reads a little higher.
                 body = body.push(field_row(
-                    "Download".to_owned(),
-                    mono(format!("{} to download", size_of(need))).into(),
+                    i18n::text(language, "dialog-download"),
+                    mono(i18n::text_with_args(language, "dialog-download-size", &[("size", &size_of(need))])).into(),
                 ));
                 match dialog.target().and_then(|t| t.disk) {
                     Some(disk) => {
                         body = body.push(field_row(
-                            "Free space".to_owned(),
+                            i18n::text(language, "dialog-free-space"),
                             mono(size_of(disk.free)).into(),
                         ));
                         ready = disk.free > need;
                         if !ready {
                             body = body.push(
-                                text("⚠ Not enough free space on that disk.")
+                                text(i18n::text(language, "dialog-not-enough-space"))
                                     .size(theme::LABEL)
                                     .color(theme::ERROR),
                             );
@@ -98,18 +95,18 @@ impl Lightforge {
 
         // A pair, so one size: the same height and width, labels centred,
         // with only the fill telling the default from the way out.
-        let choice = |label: &'static str| {
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(150.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
         };
         let actions = row![
             Space::new().width(Length::Fill),
-            tappable("cancel", Some(Message::InstallCancel), choice("Cancel").style(theme::outlined)),
+            tappable("cancel", Some(Message::InstallCancel), choice(i18n::text(language, "common-cancel")).style(theme::outlined)),
             tappable(
                 "start install",
                 ready.then_some(Message::InstallStart),
-                choice("Start install").style(theme::filled(theme::INSTALL)),
+                choice(i18n::text(language, "dialog-start-install")).style(theme::filled(theme::INSTALL)),
             ),
         ]
         .spacing(theme::SM)
@@ -117,7 +114,7 @@ impl Lightforge {
 
         container(
             column![
-                section(format!("Install {}", dialog.label), body.into()),
+                section(i18n::text_with_args(language, "dialog-install-game", &[("game", &dialog.label)]), body.into()),
                 actions,
             ]
             .spacing(theme::LG),
@@ -135,31 +132,22 @@ impl Lightforge {
     /// explanation is there because the cost falls on games they are not
     /// looking at.
     pub(crate) fn downgrade_card<'a>(&'a self, dialog: &'a DowngradeDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let what = match dialog.what {
-            Launch::Game => format!("Launching {}", dialog.label),
-            Launch::BattleNet => format!("Starting {} through Battle.net", dialog.label),
-            Launch::Client => "Opening Battle.net".to_owned(),
-            Launch::Install => "Opening Battle.net's install flow".to_owned(),
+            Launch::Game => i18n::text_with_args(language, "dialog-launching-game", &[("game", &dialog.label)]),
+            Launch::BattleNet => i18n::text_with_args(language, "dialog-starting-game-through-battlenet", &[("game", &dialog.label)]),
+            Launch::Client => i18n::text(language, "dialog-opening-battlenet"),
+            Launch::Install => i18n::text(language, "dialog-opening-install-flow"),
         };
 
         let body = column![
-            field_row("Would run".to_owned(), mono(dialog.pick.clone()).into()),
-            field_row("Prefix built by".to_owned(), mono(dialog.built_by.clone()).into()),
-            text(format!(
-                "{what} under {} would open the Wine prefix with an older Proton than the \
-                 {} that last upgraded it.",
-                dialog.pick, dialog.built_by,
-            ))
+            field_row(i18n::text(language, "dialog-would-run"), mono(dialog.pick.clone()).into()),
+            field_row(i18n::text(language, "dialog-prefix-built-by"), mono(dialog.built_by.clone()).into()),
+            text(i18n::text_with_args(language, "dialog-downgrade-warning", &[("what", &what), ("pick", &dialog.pick), ("built_by", &dialog.built_by)]))
             .size(theme::LABEL)
             .color(theme::UPDATE),
             muted(
-                "Every game here shares that one prefix, along with the Battle.net install \
-                 and its login. Proton migrates a prefix forward and never back, so an older \
-                 build can leave it in a state the newer one did not expect — which shows up \
-                 as a game or the client failing to start, not as an error here. If this \
-                 build is the one the game needs, go ahead; if it is not, pin it back under \
-                 Settings › Proton."
-                    .to_owned(),
+                i18n::text(language, "dialog-downgrade-explanation"),
                 theme::LABEL,
             ),
         ]
@@ -175,19 +163,19 @@ impl Lightforge {
             tappable(
                 "cancel",
                 Some(Message::DowngradeCancel),
-                choice("Cancel".to_owned()).style(theme::outlined),
+                choice(i18n::text(language, "common-cancel")).style(theme::outlined),
             ),
             tappable(
                 "launch anyway",
                 Some(Message::DowngradeConfirm),
-                choice("Launch anyway".to_owned()).style(theme::filled(theme::UPDATE)),
+                choice(i18n::text(language, "dialog-launch-anyway")).style(theme::filled(theme::UPDATE)),
             ),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center);
 
         container(
-            column![section("Older Proton than this prefix".to_owned(), body.into()), actions]
+            column![section(i18n::text(language, "dialog-older-proton-title"), body.into()), actions]
                 .spacing(theme::LG),
         )
         .width(Length::Fixed(560.0))
@@ -205,25 +193,20 @@ impl Lightforge {
     ///
     /// One line of consequence under the title, and two buttons.
     pub(crate) fn cancel_card<'a>(&'a self, dialog: &'a CancelDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let updating = dialog.installed.is_some();
         let (title, hint, keep, give_up) = match &dialog.installed {
             Some(version) => (
-                format!("Cancel the update to {}?", dialog.label),
-                format!(
-                    "{} stays on {version}, and what has already downloaded is \
-                     kept for the next update.",
-                    dialog.label
-                ),
-                "Keep downloading",
-                "Cancel update",
+                i18n::text_with_args(language, "dialog-cancel-update-title", &[("game", &dialog.label)]),
+                i18n::text_with_args(language, "dialog-cancel-update-body", &[("game", &dialog.label), ("version", version)]),
+                i18n::text(language, "dialog-keep-downloading"),
+                i18n::text(language, "dialog-cancel-update"),
             ),
             None => (
-                format!("Cancel installing {}?", dialog.label),
-                "Cancelling the download will remove all downloaded files on \
-                 your drive."
-                    .to_owned(),
-                "Keep installing",
-                "Cancel install",
+                i18n::text_with_args(language, "dialog-cancel-install-title", &[("game", &dialog.label)]),
+                i18n::text(language, "dialog-cancel-install-body"),
+                i18n::text(language, "dialog-keep-installing"),
+                i18n::text(language, "dialog-cancel-install"),
             ),
         };
 
@@ -233,7 +216,7 @@ impl Lightforge {
 
         // One shape for both, so neither reads as the safe one by being
         // bigger. Only the fill says which is which.
-        let choice = |label: &'static str| {
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(170.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
@@ -259,18 +242,19 @@ impl Lightforge {
 
     /// The uninstall confirmation's card.
     pub(crate) fn uninstall_card<'a>(&'a self, dialog: &'a UninstallDialog) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let mut body = column![].spacing(theme::MD);
         let mut ready = false;
         match &dialog.plan {
             None => {
-                body = body.push(muted("Working out what to remove…".to_owned(), theme::LABEL));
+                body = body.push(muted(i18n::text(language, "dialog-uninstall-planning"), theme::LABEL));
             }
             Some(Err(e)) => {
                 body = body.push(text(format!("⚠ {e}")).size(theme::LABEL).color(theme::ERROR));
             }
             Some(Ok(preview)) if preview.plan.is_empty() => {
                 body = body.push(muted(
-                    "Nothing to remove — it is not installed here.".to_owned(),
+                    i18n::text(language, "dialog-uninstall-empty"),
                     theme::LABEL,
                 ));
             }
@@ -286,17 +270,15 @@ impl Lightforge {
                 )
                 .spacing(theme::XS);
                 body = body
-                    .push(field_row("Deletes".to_owned(), deletes.into()))
+                    .push(field_row(i18n::text(language, "dialog-deletes"), deletes.into()))
                     .push(field_row(
-                        "Frees".to_owned(),
+                        i18n::text(language, "dialog-frees"),
                         mono(size_of(plan.bytes + reclaim.map_or(0, |r| r.freed))).into(),
                     ));
 
                 let (note, color) = match plan.is_whole_install() {
                     true => (
-                        "This is the last WoW version here, so the shared game data goes with \
-                         it."
-                            .to_owned(),
+                        i18n::text(language, "dialog-uninstall-last-version"),
                         theme::ERROR,
                     ),
                     false => {
@@ -310,17 +292,9 @@ impl Lightforge {
                             // Only what nobody else uses goes; an archive
                             // it shares with them keeps its bytes as dead
                             // space until something rewrites it.
-                            Some(Ok(r)) if r.stranded > 0 => format!(
-                                "Game data it shares with {others} stays. About {} of its own \
-                                 is scattered too thinly through their archives to be worth \
-                                 rewriting and stays as unused space.",
-                                size_of(r.stranded)
-                            ),
-                            Some(Ok(_)) => format!("Game data it shares with {others} stays."),
-                            _ => format!(
-                                "Could not check which game data only it uses, so the shared \
-                                 store is left as it is for {others}."
-                            ),
+                            Some(Ok(r)) if r.stranded > 0 => i18n::text_with_args(language, "dialog-uninstall-shared-stranded", &[("games", &others), ("size", &size_of(r.stranded))]),
+                            Some(Ok(_)) => i18n::text_with_args(language, "dialog-uninstall-shared", &[("games", &others)]),
+                            _ => i18n::text_with_args(language, "dialog-uninstall-shared-unknown", &[("games", &others)]),
                         };
                         (note, theme::MUTED)
                     }
@@ -328,29 +302,22 @@ impl Lightforge {
                 body = body.push(text(note).size(theme::LABEL).color(color));
                 if let Some(r) = reclaim.filter(|r| r.moved > 0) {
                     let line = match dialog.working {
-                        true => format!(
-                            "Compacting: {} of {} copied.",
-                            size_of(dialog.copied.load(std::sync::atomic::Ordering::Relaxed).min(r.moved)),
-                            size_of(r.moved)
-                        ),
-                        false => format!(
-                            "To free its space, {} of the game data they still use is copied into \
-                             fresh archives first. That can take a few minutes.",
-                            size_of(r.moved)
-                        ),
+                        true => i18n::text_with_args(language, "dialog-uninstall-compacting", &[
+                            ("copied", &size_of(dialog.copied.load(std::sync::atomic::Ordering::Relaxed).min(r.moved))),
+                            ("total", &size_of(r.moved)),
+                        ]),
+                        false => i18n::text_with_args(language, "dialog-uninstall-copying-first", &[("size", &size_of(r.moved))]),
                     };
                     body = body.push(muted(line, theme::LABEL));
                 }
                 body = body.push(muted(
-                    "Its addons and settings (Interface, WTF) are deleted with it. Battle.net \
-                     stops listing it too."
-                        .to_owned(),
+                    i18n::text(language, "dialog-uninstall-addon-settings-note"),
                     theme::LABEL,
                 ));
             }
         }
 
-        let choice = |label: &'static str| {
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(150.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
@@ -360,12 +327,12 @@ impl Lightforge {
             tappable(
                 "cancel",
                 (!dialog.working).then_some(Message::UninstallCancel),
-                choice("Cancel").style(theme::outlined),
+                choice(i18n::text(language, "common-cancel")).style(theme::outlined),
             ),
             tappable(
                 "uninstall",
                 (ready && !dialog.working).then_some(Message::UninstallConfirm),
-                choice(if dialog.working { "Uninstalling…" } else { "Uninstall" })
+                choice(if dialog.working { i18n::text(language, "dialog-uninstalling") } else { i18n::text(language, "common-uninstall") })
                     .style(theme::filled(theme::ERROR)),
             ),
         ]
@@ -373,7 +340,7 @@ impl Lightforge {
         .align_y(Alignment::Center);
 
         container(
-            column![section(format!("Uninstall {}", dialog.label), body.into()), actions]
+            column![section(i18n::text_with_args(language, "dialog-uninstall-game", &[("game", &dialog.label)]), body.into()), actions]
                 .spacing(theme::LG),
         )
         .width(Length::Fixed(560.0))
@@ -385,7 +352,7 @@ impl Lightforge {
 
 /// One drive the install can go on: its name and path, its free space, and
 /// whether it would share a data store with what is already there.
-fn install_target_row(index: usize, target: &InstallTarget, chosen: bool) -> Element<'_, Message> {
+fn install_target_row<'a>(index: usize, target: &'a InstallTarget, chosen: bool, language: &str) -> Element<'a, Message> {
     // Fixed, and wide enough for the longest thing that goes in it.
     // Left to shrink it was squeezed by the path beside it until
     // "1.37 TiB free" came out as three stacked words.
@@ -394,14 +361,14 @@ fn install_target_row(index: usize, target: &InstallTarget, chosen: bool) -> Ele
         .width(Length::Fixed(110.0))
         .align_x(Alignment::End);
     right = match target.disk {
-        Some(disk) => right.push(mono(format!("{} free", size_of(disk.free)))),
+        Some(disk) => right.push(mono(i18n::text_with_args(language, "dialog-drive-free", &[("size", &size_of(disk.free))]))),
         None => right.push(muted("—".to_owned(), theme::LABEL)),
     };
     // Battle.net's own wording and colour for the same fact: a second
     // WoW version in a folder that already has one shares its data
     // store, so what is already downloaded is not fetched twice.
     if target.shares {
-        right = right.push(text("Sharing data").size(theme::CAPTION).color(theme::OK));
+        right = right.push(text(i18n::text(language, "dialog-sharing-data")).size(theme::CAPTION).color(theme::OK));
     }
 
     let mut left = column![row![
@@ -414,7 +381,7 @@ fn install_target_row(index: usize, target: &InstallTarget, chosen: bool) -> Ele
     // prefix is the longest and least informative part of the path,
     // and this row is where the width is tightest.
     left = left.push(muted(home_relative(&target.install), theme::CAPTION));
-    if let Some(reason) = target.state.reason(&target.label) {
+    if let Some(reason) = i18n::library_state_reason(language, target.state, &target.label) {
         left = left.push(text(reason).size(theme::CAPTION).color(theme::ERROR));
     }
 

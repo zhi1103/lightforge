@@ -21,13 +21,11 @@ impl Lightforge {
 
     /// All the app shows when `config.toml` did not load.
     pub(crate) fn broken_config_screen<'a>(&'a self, error: &'a str) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         let body = column![
-            text("Lightforge can't read its settings").size(theme::TITLE),
+            text(i18n::text(language, "dialog-config-title")).size(theme::TITLE),
             muted(
-                "Nothing has been changed. Fix the file, or move it aside to start over \
-                 with defaults, then restart Lightforge. A copy was saved next to it as \
-                 config.toml.broken."
-                    .to_owned(),
+                i18n::text(language, "dialog-config-body"),
                 theme::BODY,
             ),
             container(mono(error.to_owned()))
@@ -35,7 +33,7 @@ impl Lightforge {
                 .width(Length::Fill)
                 .style(theme::row),
             row![
-                secondary("Open config folder", Message::OpenConfigFolder).enabled(true),
+                secondary(&i18n::text(language, "dialog-open-config-folder"), Message::OpenConfigFolder).enabled(true),
             ],
         ]
         .spacing(theme::MD)
@@ -48,11 +46,15 @@ impl Lightforge {
     ///
     /// A dialog, the one thing that opens itself; also on the Updates page.
     pub(crate) fn patch_notes_card<'a>(&'a self, notes: &'a PatchNotes) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
         // Only the notes scroll; about 630pt in all, inside the 820 minimum.
         const NOTES_MAX: f32 = 480.0;
 
         let body = column![
-            muted(format!("Version {}", notes.release.version), theme::LABEL),
+            muted(
+                i18n::text_with_args(language, "updates-release-version", &[("version", &notes.release.version)]),
+                theme::LABEL,
+            ),
             container(focus::region(
                 "notes",
                 scrollable(release_notes(&notes.release))
@@ -68,7 +70,7 @@ impl Lightforge {
                 focus::Target::Key("mute notes".to_owned()),
                 Some(Message::MutePatchNotes(!notes.mute)),
                 tick(notes.mute)
-                    .label("Never show this again")
+                    .label(i18n::text(language, "dialog-never-show-again"))
                     .on_toggle(Message::MutePatchNotes)
                     .text_size(theme::tap_text(theme::BODY)),
             ),
@@ -76,7 +78,7 @@ impl Lightforge {
             self.ring(
                 focus::Target::NotesDismiss,
                 Some(Message::DismissPatchNotes),
-                button(text("Got it").size(theme::LABEL).width(Length::Fill).center())
+                button(text(i18n::text(language, "common-got-it")).size(theme::LABEL).width(Length::Fill).center())
                     .width(Length::Fixed(150.0))
                     .padding(theme::tap([theme::SM, theme::MD]))
                     .style(theme::filled(theme::ACCENT))
@@ -87,7 +89,7 @@ impl Lightforge {
         .align_y(Alignment::Center);
 
         container(
-            column![section("What's new in Lightforge".to_owned(), body.into()), actions]
+            column![section(i18n::text(language, "dialog-whats-new"), body.into()), actions]
                 .spacing(theme::LG),
         )
         .width(Length::Fixed(560.0))
@@ -99,30 +101,31 @@ impl Lightforge {
     /// The question before Battle.net is closed under a running game, which
     /// may need it (Overwatch does).
     pub(crate) fn quit_client_card<'a>(&'a self, dialog: &'a QuitClientDialog) -> Element<'a, Message> {
-        let choice = |label: &'static str| {
+        let language = &self.config.interface_language;
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(170.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
         };
         let actions = row![
             Space::new().width(Length::Fill),
-            tappable("keep battle.net", Some(Message::QuitBattleNetDismiss), choice("Keep it open").style(theme::outlined)),
+            tappable("keep battle.net", Some(Message::QuitBattleNetDismiss), choice(i18n::text(language, "dialog-keep-open")).style(theme::outlined)),
             tappable(
                 "quit battle.net",
                 Some(Message::QuitBattleNetConfirm),
-                choice("Quit Battle.net").style(theme::filled(theme::ERROR)),
+                choice(i18n::text(language, "menu-quit-battlenet")).style(theme::filled(theme::ERROR)),
             ),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center);
 
         let running = match dialog.games.as_slice() {
-            [one] => format!("{one} is still running and may need it."),
-            many => format!("{} are still running and may need it.", many.join(", ")),
+            [one] => i18n::text_with_args(language, "dialog-client-still-needed-one", &[("game", one)]),
+            many => i18n::text_with_args(language, "dialog-client-still-needed-many", &[("games", &many.join(", "))]),
         };
         container(
             column![
-                text("Quit Battle.net?").size(theme::HEADING + 2.0),
+                text(i18n::text(language, "dialog-quit-battlenet-title")).size(theme::HEADING + 2.0),
                 muted(running, theme::BODY),
                 actions,
             ]
@@ -136,24 +139,25 @@ impl Lightforge {
 
     /// The question before a running game is stopped.
     pub(crate) fn stop_card<'a>(&'a self, dialog: &'a StopDialog) -> Element<'a, Message> {
-        let choice = |label: &'static str| {
+        let language = &self.config.interface_language;
+        let choice = |label: String| {
             button(text(label).size(theme::LABEL).width(Length::Fill).center())
                 .width(Length::Fixed(170.0))
                 .padding(theme::tap([theme::SM, theme::MD]))
         };
         let actions = row![
             Space::new().width(Length::Fill),
-            tappable("keep playing", Some(Message::StopGameDismiss), choice("Keep playing").style(theme::outlined)),
+            tappable("keep playing", Some(Message::StopGameDismiss), choice(i18n::text(language, "dialog-keep-playing")).style(theme::outlined)),
             tappable(
                 "stop game",
                 Some(Message::StopGameConfirm),
-                choice("Stop game").style(theme::filled(theme::ERROR)),
+                choice(i18n::text(language, "dialog-stop-game")).style(theme::filled(theme::ERROR)),
             ),
         ]
         .spacing(theme::SM)
         .align_y(Alignment::Center);
 
-        container(column![text(format!("Stop {}?", dialog.label)).size(theme::HEADING + 2.0), actions].spacing(theme::LG))
+        container(column![text(i18n::text_with_args(language, "dialog-stop-game-question", &[("game", &dialog.label)])).size(theme::HEADING + 2.0), actions].spacing(theme::LG))
             .width(Length::Fixed(520.0))
             .padding(theme::LG)
             .style(theme::dialog)

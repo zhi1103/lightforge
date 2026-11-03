@@ -161,14 +161,17 @@ fn found_games(app: &mut Lightforge, msg: Msg) -> iced::Task<Message> {
         Msg::Browse => iced::Task::perform(
             // The XDG portal through `ashpd`, as the screenshot picker does;
             // see `update/report.rs` for why not `rfd`.
-            async {
-                let request = ashpd::desktop::file_chooser::OpenFileRequest::default()
-                    .title("Choose a Wine prefix or a game folder")
-                    .modal(true)
-                    .directory(true)
-                    .multiple(false);
-                let files = request.send().await.ok()?.response().ok()?;
-                files.uris().first().and_then(|uri| uri.to_file_path().ok())
+            {
+                let title = crate::i18n::text(&app.config.interface_language, "wizard-choose-prefix-or-game-folder");
+                async move {
+                    let request = ashpd::desktop::file_chooser::OpenFileRequest::default()
+                        .title(title.as_str())
+                        .modal(true)
+                        .directory(true)
+                        .multiple(false);
+                    let files = request.send().await.ok()?.response().ok()?;
+                    files.uris().first().and_then(|uri| uri.to_file_path().ok())
+                }
             },
             |path| Message::Wizard(Msg::Browsed(path)),
         ),
@@ -230,11 +233,7 @@ fn found_games(app: &mut Lightforge, msg: Msg) -> iced::Task<Message> {
                     mark_known(app);
                 }
                 _ => {
-                    wizard.point_error = Some(
-                        "nothing of Blizzard's in there — point at a Wine prefix, or at a \
-                         World of Warcraft folder with a .build.info in it"
-                            .to_owned(),
-                    )
+                    wizard.point_error = Some(crate::i18n::text(&app.config.interface_language, "wizard-no-game-folder"))
                 }
             }
             iced::Task::none()

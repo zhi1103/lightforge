@@ -63,6 +63,7 @@ pub enum Target {
     /// A hand-off game's link to how Battle.net launches.
     HandOffSettings,
     /// An entry in the app menu or the gear menu, by its label.
+    /// Stable app-menu entry id; the visible label is translated separately.
     Menu(&'static str),
     /// One of the marks at the foot of the app menu, by its address.
     Link(&'static str),

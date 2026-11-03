@@ -38,11 +38,11 @@ impl Lightforge {
     ) -> Task<Message> {
         let code = self.launching.take().unwrap_or_else(|| self.selected.code.clone());
         self.busy = false;
-        self.status = format!("{} is running", game.name);
+        self.status = crate::i18n::text_with_args(&self.config.interface_language, "launch-game-running", &[("game", &game.name)]);
         self.playing.retain(|s| s.code != code);
         self.playing.push(Session { code: code.clone(), game: game.clone(), stopping: false });
         Task::perform(
-            tasks::await_game_exit(self.layout.clone(), code.clone(), game, settle_after),
+            tasks::await_game_exit(self.layout.clone(), code.clone(), game, settle_after, self.config.interface_language.clone()),
             move |result| Message::GameExited(code.clone(), result),
         )
     }
@@ -59,9 +59,9 @@ impl Lightforge {
             return Task::none();
         }
         self.quitting_client = true;
-        self.status = "closing Battle.net…".to_owned();
+        self.status = crate::i18n::text(&self.config.interface_language, "launch-closing-battlenet");
         Task::perform(
-            tasks::quit_battle_net(self.layout.clone(), self.selected.code.clone()),
+            tasks::quit_battle_net(self.layout.clone(), self.selected.code.clone(), self.config.interface_language.clone()),
             Message::BattleNetQuit,
         )
     }
@@ -115,25 +115,26 @@ impl Lightforge {
         // leaves an empty install.
         if !matches!(what, Launch::Client) {
             if let Some(drive) = self.offline_drive(&self.selected.code) {
-                self.error = Some(format!("{drive} is not mounted").into());
+                self.error = Some(crate::i18n::text_with_args(&self.config.interface_language, "storage-drive-not-mounted", &[("drive", &drive)]).into());
                 return Task::none();
             }
         }
 
         // Maintenance rewrites the store; downloads are paused by pre-flight.
         if let Some(what) = self.maintenance() {
-            self.error = Some(format!("wait for {what} to finish first").into());
+            let what = crate::i18n::maintenance_label(&self.config.interface_language, what);
+            self.error = Some(crate::i18n::text_with_args(&self.config.interface_language, "status-wait-for-first", &[("what", &what)]).into());
             return Task::none();
         }
 
         self.busy = true;
         self.error = None;
-        self.status = "pre-flight…".to_owned();
+        self.status = crate::i18n::text(&self.config.interface_language, "launch-preflight");
         self.launching = Some(self.selected.code.clone());
 
         // Wait for an addon pass extracting into what the client reads.
         if self.addon_auto_running && !matches!(what, Launch::Client) {
-            self.status = "finishing addon updates…".to_owned();
+            self.status = crate::i18n::text(&self.config.interface_language, "launch-finishing-addon-updates");
             self.launch_after_addons = Some(what);
             return Task::none();
         }
@@ -174,10 +175,10 @@ impl Lightforge {
         // The long wait starts here; say what it is.
         match what {
             Launch::Game => {
-                self.status = "starting the game…".to_owned();
+                self.status = crate::i18n::text(&self.config.interface_language, "launch-starting-game");
                 Task::batch([
                     Task::perform(
-                        tasks::start_game(self.layout.clone(), code.clone()),
+                        tasks::start_game(self.layout.clone(), code.clone(), self.config.interface_language.clone()),
                         Message::GameStarted,
                     ),
                     self.minimize_if_asked(),
@@ -185,7 +186,7 @@ impl Lightforge {
             }
             Launch::BattleNet => {
                 // Battle.net gives nothing back: the prefix is watched.
-                self.status = "handing off to Battle.net…".to_owned();
+                self.status = crate::i18n::text(&self.config.interface_language, "launch-handing-off-battlenet");
                 Task::perform(
                     tasks::launch_via_battle_net(
                         self.layout.clone(),
@@ -198,7 +199,7 @@ impl Lightforge {
                 )
             }
             Launch::Install => {
-                self.status = "opening Battle.net…".to_owned();
+                self.status = crate::i18n::text(&self.config.interface_language, "launch-opening-battlenet");
                 Task::perform(
                     tasks::install_via_battle_net(
                         self.layout.clone(),
@@ -206,17 +207,19 @@ impl Lightforge {
                         self.config.prefix_user.clone(),
                         self.install_uid_of(&code),
                         self.label_of(&code),
+                        self.config.interface_language.clone(),
                     ),
                     Message::Launched,
                 )
             }
             Launch::Client => {
-                self.status = "opening Battle.net…".to_owned();
+                self.status = crate::i18n::text(&self.config.interface_language, "launch-opening-battlenet");
                 Task::perform(
                     tasks::open_battle_net(
                         self.layout.clone(),
                         code.clone(),
                         self.config.prefix_user.clone(),
+                        self.config.interface_language.clone(),
                     ),
                     Message::Launched,
                 )
@@ -437,10 +440,10 @@ impl Lightforge {
     /// Also sets the library up and links it under its drive letters.
     pub(crate) fn target_install(&mut self, code: &ProductCode, id: &str) -> Result<(), String> {
         let Some(library) = self.config.libraries.iter_mut().find(|l| l.id == id) else {
-            return Err("that drive is no longer configured".to_owned());
+            return Err(i18n::text(&self.config.interface_language, "storage-drive-no-longer-configured"));
         };
         if library.state() == library::State::Missing {
-            return Err(format!("{} is not mounted", library.label));
+            return Err(i18n::text_with_args(&self.config.interface_language, "storage-drive-not-mounted", &[("drive", &library.label)]));
         }
         library.claim().map_err(|e| chain(&e))?;
         if let Some(product) = self.config.product_mut(code) {

@@ -73,16 +73,16 @@ impl SettingsTab {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self, language: &str) -> String {
         match self {
-            Self::General => "General",
-            Self::Setup => "Setup",
-            Self::Proton => "Proton",
-            Self::BattleNet => "Battle.net",
-            Self::Downloads => "Downloads",
-            Self::Addons => "Addons",
-            Self::Storage => "Storage",
-            Self::About => "About",
+            Self::General => crate::i18n::text(language, crate::i18n::SETTINGS_GENERAL),
+            Self::Setup => crate::i18n::text(language, crate::i18n::SETTINGS_SETUP),
+            Self::Proton => crate::i18n::text(language, crate::i18n::SETTINGS_PROTON),
+            Self::BattleNet => crate::i18n::text(language, crate::i18n::SETTINGS_BATTLENET),
+            Self::Downloads => crate::i18n::text(language, crate::i18n::DOWNLOADS_SECTION_TITLE),
+            Self::Addons => crate::i18n::text(language, crate::i18n::SETTINGS_ADDONS),
+            Self::Storage => crate::i18n::text(language, crate::i18n::SETTINGS_STORAGE),
+            Self::About => crate::i18n::text(language, crate::i18n::SETTINGS_ABOUT),
         }
     }
 }
