@@ -137,6 +137,47 @@ impl Lightforge {
         .into()
     }
 
+    /// The offer to restart after Seamless Battle.net Mode was switched.
+    pub(crate) fn mode_restart_card(&self, on: bool) -> Element<'_, Message> {
+        let language = &self.config.interface_language;
+        let choice = |label: &str| {
+            button(text(label.to_owned()).size(theme::LABEL).width(Length::Fill).center())
+                .width(Length::Fixed(170.0))
+                .padding(theme::tap([theme::SM, theme::MD]))
+        };
+        // A restart would lose track of a running game, and stop a download.
+        let can_restart = self.can_restart() && !self.in_play() && !self.busy;
+        let actions = row![
+            Space::new().width(Length::Fill),
+            tappable("mode restart later", Some(Message::ModeRestartLater), choice(&i18n::text(language, "dialog-mode-restart-later")).style(theme::outlined)),
+            tappable(
+                "mode restart",
+                can_restart.then_some(Message::ModeRestart),
+                choice(&i18n::text(language, "dialog-mode-restart-button")).style(theme::filled(theme::ACCENT)),
+            ),
+        ]
+        .spacing(theme::SM)
+        .align_y(Alignment::Center);
+
+        let state = match on {
+            true => i18n::text(language, "dialog-mode-restart-on"),
+            false => i18n::text(language, "dialog-mode-restart-off"),
+        };
+        let mut body = column![
+            text(i18n::text(language, "dialog-mode-restart-title")).size(theme::HEADING + 2.0),
+            muted(state, theme::BODY),
+        ]
+        .spacing(theme::LG);
+        if !can_restart {
+            body = body.push(muted(i18n::text(language, "dialog-mode-restart-wait"), theme::LABEL));
+        }
+        container(body.push(actions))
+            .width(Length::Fixed(520.0))
+            .padding(theme::LG)
+            .style(theme::dialog)
+            .into()
+    }
+
     /// The question before a running game is stopped.
     pub(crate) fn stop_card<'a>(&'a self, dialog: &'a StopDialog) -> Element<'a, Message> {
         let language = &self.config.interface_language;

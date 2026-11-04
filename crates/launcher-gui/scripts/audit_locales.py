@@ -64,7 +64,7 @@ def main() -> int:
     # directory-by-directory; this guard keeps new literal labels from joining it.
     try:
         diff = subprocess.run(
-            ["git", "diff", "--unified=0", "--", "crates/launcher-gui/src"],
+            ["git", "diff", "HEAD", "--unified=0", "--", "crates/launcher-gui/src"],
             cwd=ROOT, check=True, capture_output=True, text=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError) as error:
@@ -91,7 +91,9 @@ def main() -> int:
     scoped = [
         "crates/launcher-gui/src/view/header/",
         "crates/launcher-gui/src/view/settings/",
+        "crates/launcher-gui/src/view/companions.rs",
         "crates/launcher-gui/src/update/",
+        "crates/launcher-gui/src/app/launch.rs",
         "crates/launcher-gui/src/app/nav.rs",
         "crates/launcher-gui/src/app/queue.rs",
         "crates/launcher-gui/src/app/library.rs",
@@ -107,7 +109,7 @@ def main() -> int:
     ]
     try:
         scoped_diff = subprocess.run(
-            ["git", "diff", "--unified=0", "--", *scoped],
+            ["git", "diff", "HEAD", "--unified=0", "--", *scoped],
             cwd=ROOT, check=True, capture_output=True, text=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError) as error:

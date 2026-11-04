@@ -161,6 +161,11 @@ impl Lightforge {
                 nav(i18n::text(language, "header-play"), Screen::Dashboard),
             ),
             self.ring(
+                focus::Target::Tab(Screen::Companions),
+                Some(Message::Show(Screen::Companions)),
+                nav(i18n::text(language, "header-tools"), Screen::Companions),
+            ),
+            self.ring(
                 focus::Target::Shop,
                 Some(Message::OpenLink(SHOP_URL)),
                 outbound(i18n::text(language, "header-battlenet-shop"), SHOP_URL),

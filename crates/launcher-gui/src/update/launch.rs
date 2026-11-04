@@ -154,6 +154,34 @@ impl Lightforge {
                             false => i18n::text(&self.config.interface_language, "launch-battlenet-attention-window"),
                         })))
                     }
+                    Ok(tasks::Handoff::ClientUpdated) if self.config.battle_net_in_background => {
+                        self.status = i18n::text(&self.config.interface_language, "launch-client-updated-restarting");
+                        self.launch_after_client = Some(Launch::BattleNet);
+                        self.warm_client()
+                    }
+                    Ok(tasks::Handoff::ClientUpdated) => self.update(Message::Launched(Ok(
+                        i18n::text(&self.config.interface_language, "launch-client-updated-retry"),
+                    ))),
+                    Ok(tasks::Handoff::NeedsUpdate) => {
+                        let code = self.launching.clone().unwrap_or_else(|| self.selected.code.clone());
+                        match (Kind::of(&code), self.config.battle_net_in_background) {
+                            (Kind::Managed, _) => self.update(Message::Launched(Ok(
+                                i18n::text(&self.config.interface_language, "launch-client-wants-managed-update"),
+                            ))),
+                            (Kind::HandOff, false) => self.update(Message::Launched(Ok(
+                                i18n::text(&self.config.interface_language, "launch-client-game-update"),
+                            ))),
+                            (Kind::HandOff, true) => {
+                                self.busy = false;
+                                self.launching = None;
+                                self.status = i18n::text(&self.config.interface_language, "launch-updating-in-battlenet");
+                                self.start_client_update(code)
+                            }
+                        }
+                    }
+                    Ok(tasks::Handoff::Ignored) => self.update(Message::Launched(Ok(
+                        i18n::text(&self.config.interface_language, "launch-client-ignored"),
+                    ))),
                     // Signed in, told to launch, and nothing came up.
                     Ok(tasks::Handoff::NothingStarted) => self.update(Message::Launched(Ok(
                         i18n::text(&self.config.interface_language, "launch-battlenet-no-game-started"),
@@ -219,11 +247,99 @@ impl Lightforge {
             Message::ClientWatch => self.check_client(),
 
             Message::ClientSeen(up) => {
+                let vanished = self.client_up && !up;
                 self.client_up = up;
                 if !up {
                     self.client_menu_open = false;
+                    // Quit before anyone signed it in.
+                    if self.client_phase == ClientPhase::NeedsSignIn {
+                        self.client_phase = ClientPhase::Settled;
+                    }
+                }
+                if !up {
+                    self.update_pending = None;
+                }
+                if self.client_may_return() && tasks::take_client_owed() {
+                    return Ok(self.warm_client());
+                }
+                // Not during a launch, which reads the same log itself.
+                if vanished && self.config.battle_net_in_background && !self.busy {
+                    return Ok(Task::perform(
+                        tasks::note_self_update(self.layout.clone(), self.config.prefix_user.clone()),
+                        |()| Message::ClientWatch,
+                    ));
+                }
+                match up {
+                    true => self.check_update_pending(),
+                    false => Task::none(),
+                }
+            }
+
+            Message::ClientUpdatePending(code, pending) => {
+                self.update_pending = pending.then_some(code);
+                Task::none()
+            }
+
+            Message::StopWatchingClientUpdate => {
+                if let Some(update) = &self.client_update {
+                    update.stop.cancel();
                 }
                 Task::none()
+            }
+
+            Message::ClientUpdateDone(code, result) => {
+                self.client_update = None;
+                self.update_pending = None;
+                match result {
+                    // Asked for by pressing Play, so it starts, unless the user
+                    // has since gone to another game or started something else.
+                    Ok(tasks::ClientUpdated::Completed) if self.selected.code == code && !self.busy => {
+                        self.preflight(Launch::BattleNet)
+                    }
+                    Ok(tasks::ClientUpdated::Completed) => {
+                        self.status = i18n::text(&self.config.interface_language, "launch-client-update-done");
+                        Task::none()
+                    }
+                    Ok(tasks::ClientUpdated::StoppedWatching) => {
+                        self.status = i18n::text(&self.config.interface_language, "launch-client-update-stopped");
+                        Task::none()
+                    }
+                    Err(e) => {
+                        self.error = Some(e);
+                        Task::none()
+                    }
+                }
+            }
+
+            Message::BackgroundClient(result) => {
+                let waiting = self.launch_after_client.take();
+                match result {
+                    Ok(tasks::Warmed::NeedsSignIn { started }) => {
+                        // The first answer: watch for someone signing in. The
+                        // watch running out changes nothing.
+                        let watch = match self.client_phase == ClientPhase::SigningIn {
+                            true => Task::perform(
+                                tasks::await_sign_in(self.layout.clone(), self.config.prefix_user.clone(), started),
+                                Message::BackgroundClient,
+                            ),
+                            false => Task::none(),
+                        };
+                        self.client_phase = ClientPhase::NeedsSignIn;
+                        let released = match waiting {
+                            Some(_) => self.launch_failed(&i18n::text(&self.config.interface_language, "client-update-needs-sign-in")),
+                            None => Task::none(),
+                        };
+                        Task::batch([watch, released, self.check_client()])
+                    }
+                    other => {
+                        if let Err(e) = other {
+                            tracing::warn!("Battle.net did not start in the background: {e}");
+                        }
+                        self.client_phase = ClientPhase::Settled;
+                        let launch = waiting.map_or_else(Task::none, |what| self.preflight(what));
+                        Task::batch([launch, self.check_client()])
+                    }
+                }
             }
 
             Message::ToggleClientMenu => {
@@ -278,6 +394,8 @@ impl Lightforge {
 
             Message::BattleNetQuit(result) => {
                 self.quitting_client = false;
+                // Closed on purpose: no need to ask why it went.
+                self.client_up = false;
                 match result {
                     Ok(note) => self.status = note,
                     Err(e) => self.error = Some(e),

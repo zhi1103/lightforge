@@ -256,7 +256,7 @@ impl Lightforge {
     ///
     /// The mark comes from the prefix ([`Layout::battle_net_icon`]); before
     /// Battle.net is installed, the word alone. While the client runs, the
-    /// mark carries a green dot and a chevron opens Show and Quit.
+    /// mark carries a dot and a chevron opens Show and Quit.
     pub(crate) fn battle_net_button(&self) -> Element<'_, Message> {
         let mut face = row![].spacing(theme::SM).align_y(Alignment::Center);
         if let Some(icon) = &self.bnet_icon {
@@ -264,16 +264,16 @@ impl Lightforge {
                 .content_fit(ContentFit::Contain)
                 .width(Length::Fixed(BNET_GLYPH))
                 .height(Length::Fixed(BNET_GLYPH));
-            face = face.push(match self.client_up {
-                true => Element::from(stack![
+            face = face.push(match self.client_dot() {
+                Some(colour) => Element::from(stack![
                     mark,
-                    container(running_dot())
+                    container(running_dot(colour))
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .align_right(Length::Fill)
                         .align_bottom(Length::Fill),
                 ]),
-                false => mark.into(),
+                None => mark.into(),
             });
         }
         // Same optical correction as the band's label, the word has no
@@ -292,9 +292,11 @@ impl Lightforge {
                     .style(theme::ghost)
                     .on_press_maybe(press),
                 container(
-                    text(match self.client_up {
-                        true => i18n::text(&self.config.interface_language, "header-battlenet-running"),
-                        false => i18n::text(&self.config.interface_language, "header-battlenet-open-hint"),
+                    text(match (self.client_phase, self.client_up) {
+                        (ClientPhase::SigningIn, _) => i18n::text(&self.config.interface_language, "header-battlenet-signing-in"),
+                        (ClientPhase::NeedsSignIn, _) => i18n::text(&self.config.interface_language, "header-battlenet-needs-sign-in"),
+                        (ClientPhase::Settled, true) => i18n::text(&self.config.interface_language, "header-battlenet-running"),
+                        (ClientPhase::Settled, false) => i18n::text(&self.config.interface_language, "header-battlenet-open-hint"),
                     })
                     .size(theme::LABEL),
                 )
@@ -330,6 +332,16 @@ impl Lightforge {
         .into()
     }
 
+    /// The colour of the dot on the mark, when there is one.
+    fn client_dot(&self) -> Option<iced::Color> {
+        match (self.client_phase, self.client_up) {
+            (ClientPhase::SigningIn, _) => Some(theme::ACCENT),
+            (ClientPhase::NeedsSignIn, _) => Some(theme::WARN),
+            (ClientPhase::Settled, true) => Some(theme::OK),
+            (ClientPhase::Settled, false) => None,
+        }
+    }
+
     /// What the Battle.net button does now: bring a running client up, or
     /// start one through pre-flight.
     fn battle_net_press(&self) -> Option<Message> {
@@ -342,12 +354,12 @@ impl Lightforge {
 }
 
 /// The mark's corner while the client runs.
-fn running_dot<'a>() -> Element<'a, Message> {
+fn running_dot<'a>(colour: iced::Color) -> Element<'a, Message> {
     container(Space::new())
         .width(Length::Fixed(RUNNING_DOT))
         .height(Length::Fixed(RUNNING_DOT))
-        .style(|_| container::Style {
-            background: Some(theme::OK.into()),
+        .style(move |_| container::Style {
+            background: Some(colour.into()),
             border: iced::border::rounded(RUNNING_DOT / 2.0),
             ..container::Style::default()
         })

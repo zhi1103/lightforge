@@ -134,6 +134,14 @@ impl Lightforge {
                     ),
                 ),
                 setting(
+                    i18n::text(language, "settings-general-background-battlenet-title"),
+                    i18n::text(language, "settings-general-background-battlenet-about"),
+                    self.hint(
+                        i18n::text(language, "settings-general-background-battlenet-hint"),
+                    ),
+                    switch(i18n::text(language, "settings-general-background-battlenet-toggle"), self.config.battle_net_in_background, Message::BattleNetInBackground),
+                ),
+                setting(
                     i18n::text(language, i18n::GENERAL_MINIMIZE_TITLE),
                     i18n::text(language, i18n::GENERAL_MINIMIZE_ABOUT),
                     self.hint(
@@ -149,14 +157,22 @@ impl Lightforge {
                     ),
                     switch("battle.net minimized", self.config.battle_net_minimized, Message::BattleNetMinimized),
                 ),
-                setting(
-                    i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_TITLE),
-                    i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_ABOUT),
-                    self.hint(
-                        i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_HINT),
+                match self.config.battle_net_in_background {
+                    true => setting(
+                        i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_TITLE),
+                        i18n::text(language, "settings-general-close-battlenet-mode-off"),
+                        None,
+                        iced::widget::toggler(false).size(theme::tap_text(20.0)).style(theme::switch),
                     ),
-                    switch("close battle.net on play", self.config.close_battle_net_on_play, Message::CloseBattleNetOnPlay),
-                ),
+                    false => setting(
+                        i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_TITLE),
+                        i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_ABOUT),
+                        self.hint(
+                            i18n::text(language, i18n::GENERAL_BATTLENET_CLOSE_HINT),
+                        ),
+                        switch(i18n::text(language, "settings-general-close-battlenet-toggle"), self.config.close_battle_net_on_play, Message::CloseBattleNetOnPlay),
+                    ),
+                },
             ]),
             setting_group([
                 setting(

@@ -2,6 +2,7 @@
 
 use crate::*;
 use iced::widget::{column, Column};
+use lightforge_core::portal::Portal;
 
 impl Lightforge {
     /// The action panel for a game Battle.net installs and starts.
@@ -18,6 +19,11 @@ impl Lightforge {
         });
 
         left = self.scan_progress(left);
+        let updating = self.client_update.as_ref().filter(|update| update.code == self.selected.code);
+        if let Some(update) = updating {
+            let progress = update.progress.lock().map(|p| *p).unwrap_or_default();
+            left = transfer_lines(left, progress, i18n::text(language, "dashboard-updating-in-battlenet"));
+        }
         match self.installed_versions.get(self.selected.code.as_str()) {
             Some(version) => {
                 left = left.push(
@@ -34,6 +40,7 @@ impl Lightforge {
         let act = self.handoff_act();
         left = left.extend(self.hint(i18n::text(language, match act {
             HandoffAct::Play => "dashboard-handoff-play-hint",
+            HandoffAct::Update => "dashboard-handoff-update-hint",
             HandoffAct::Install => "dashboard-handoff-install-hint",
             HandoffAct::OpenClient => "dashboard-handoff-open-hint",
         })).map(Element::from));
@@ -59,10 +66,12 @@ impl Lightforge {
         let session = self.session(&self.selected.code);
         let stoppable = session.is_some_and(|s| !s.stopping);
         let open = button(
-            container(text(match session {
-                Some(session) => stop_label(session, language),
-                None => i18n::text(language, match act {
+            container(text(match (session, updating) {
+                (Some(session), _) => stop_label(session, language),
+                (None, Some(_)) => i18n::text(language, "dashboard-stop-waiting"),
+                (None, None) => i18n::text(language, match act {
                     HandoffAct::Play => "dashboard-handoff-play",
+                    HandoffAct::Update => "dashboard-handoff-update",
                     HandoffAct::Install => "dashboard-handoff-install",
                     HandoffAct::OpenClient => "dashboard-handoff-open",
                 }),
@@ -81,11 +90,12 @@ impl Lightforge {
         .width(Length::Fixed(240.0))
         .height(Length::Fixed(theme::CONTROL_HEIGHT));
 
-        let press = match stoppable {
-            true => Message::AskStopGame,
-            false => act.message(),
+        let press = match (stoppable, updating) {
+            (true, _) => Message::AskStopGame,
+            (false, Some(_)) => Message::StopWatchingClientUpdate,
+            (false, None) => act.message(),
         };
-        let can_press = stoppable || (session.is_none() && !self.busy);
+        let can_press = stoppable || (session.is_none() && (!self.busy || updating.is_some()));
 
         container(
             row![
@@ -420,7 +430,7 @@ impl Lightforge {
             .style(theme::ghost)
             .padding(theme::tap([theme::XS, theme::SM]))
         };
-        row![
+        let mut links = row![
             // Disabled until there is an install.
             self.ring(
                 focus::Target::Addons,
@@ -444,8 +454,21 @@ impl Lightforge {
         ]
         // Each link carries its own air.
         .spacing(theme::XS)
-        .align_y(Alignment::Center)
-        .into()
+        .align_y(Alignment::Center);
+
+        // A direct launch's login server; Battle.net has its own picker.
+        if self.local.version.is_some() && self.kind_of(&self.selected.code) == Kind::Managed {
+            links = links.push(self.picker(
+                i18n::text(language, "dashboard-login-region"),
+                Portal::ALL.to_vec(),
+                self.local.portal,
+                "region",
+                Message::LoginRegionPicked,
+                Length::Shrink,
+                theme::LABEL,
+            ));
+        }
+        links.into()
     }
 
     /// The right of the panel: the primary action with its cog, Battle.net
