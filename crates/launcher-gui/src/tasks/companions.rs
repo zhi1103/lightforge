@@ -86,9 +86,11 @@ fn companion_runner(layout: &Layout, game: &ProductCode, language: &str) -> Resu
     };
     // The game's MangoHud setting is for the game, not a companion's window.
     let runner = runner_for(layout, game, runs).map_err(|error| {
-        match error.message.as_str() {
-            "no supported Proton-GE build installed" => Problem::from(crate::i18n::text(language, "settings-setup-proton-ge-missing")),
-            _ => error,
+        match error.as_str() {
+            "no supported Proton-GE build installed" => {
+                Problem::from(crate::i18n::text(language, "settings-setup-proton-ge-missing"))
+            }
+            _ => Problem::from(error),
         }
     })?.with_env("MANGOHUD", "0");
     if !lightforge_core::preflight::served_by(&runner, layout) {

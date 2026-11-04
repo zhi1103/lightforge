@@ -122,6 +122,7 @@ fn a_scan_after_setup_does_not_offer_what_is_already_here() {
 #[test]
 fn a_typed_folder_is_looked_through_once_and_off_the_ui_thread() {
     let (mut app, _scratch) = test_app();
+    app.config.interface_language = crate::i18n::CHINESE.to_owned();
     app.dirs = None;
     app.wizard = Some(Wizard { pointed: "/nowhere/World of Warcraft".to_owned(), ..Wizard::default() });
 

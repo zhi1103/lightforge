@@ -22,7 +22,7 @@ impl Lightforge {
         let updating = self.client_update.as_ref().filter(|update| update.code == self.selected.code);
         if let Some(update) = updating {
             let progress = update.progress.lock().map(|p| *p).unwrap_or_default();
-            left = transfer_lines(left, progress, i18n::text(language, "dashboard-updating-in-battlenet"));
+            left = transfer_lines(left, progress, i18n::text(language, "dashboard-updating-in-battlenet"), language);
         }
         match self.installed_versions.get(self.selected.code.as_str()) {
             Some(version) => {

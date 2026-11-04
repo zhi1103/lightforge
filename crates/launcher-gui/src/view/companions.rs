@@ -68,7 +68,7 @@ impl Lightforge {
 
         let label = self.label_of(&install.game);
         match &install.stage {
-            CompanionStage::Starting => setting_card(muted(i18n::text_with_args(&self.config.interface_language, "game-tools-install-starting", &[("game", label)]), theme::BODY)),
+            CompanionStage::Starting => setting_card(muted(i18n::text_with_args(&self.config.interface_language, "game-tools-install-starting", &[("game", &label)]), theme::BODY)),
             CompanionStage::Looking => setting_card(muted(i18n::text(&self.config.interface_language, "game-tools-install-looking"), theme::BODY)),
             CompanionStage::Running(_) => setting_group([setting(
                 i18n::text(&self.config.interface_language, "game-tools-installer-running"),

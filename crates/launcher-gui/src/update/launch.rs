@@ -165,12 +165,12 @@ impl Lightforge {
                     Ok(tasks::Handoff::NeedsUpdate) => {
                         let code = self.launching.clone().unwrap_or_else(|| self.selected.code.clone());
                         match (Kind::of(&code), self.config.battle_net_in_background) {
-                            (Kind::Managed, _) => self.update(Message::Launched(Ok(
-                                i18n::text(&self.config.interface_language, "launch-client-wants-managed-update"),
-                            ))),
-                            (Kind::HandOff, false) => self.update(Message::Launched(Ok(
-                                i18n::text(&self.config.interface_language, "launch-client-game-update"),
-                            ))),
+                            (Kind::Managed, _) => self.launch_failed(
+                                &i18n::text(&self.config.interface_language, "launch-client-wants-managed-update"),
+                            ),
+                            (Kind::HandOff, false) => self.launch_failed(
+                                &i18n::text(&self.config.interface_language, "launch-client-game-update"),
+                            ),
                             (Kind::HandOff, true) => {
                                 self.busy = false;
                                 self.launching = None;
@@ -179,13 +179,13 @@ impl Lightforge {
                             }
                         }
                     }
-                    Ok(tasks::Handoff::Ignored) => self.update(Message::Launched(Ok(
-                        i18n::text(&self.config.interface_language, "launch-client-ignored"),
-                    ))),
+                    Ok(tasks::Handoff::Ignored) => self.launch_failed(
+                        &i18n::text(&self.config.interface_language, "launch-client-ignored"),
+                    ),
                     // Signed in, told to launch, and nothing came up.
-                    Ok(tasks::Handoff::NothingStarted) => self.update(Message::Launched(Ok(
-                        i18n::text(&self.config.interface_language, "launch-battlenet-no-game-started"),
-                    ))),
+                    Ok(tasks::Handoff::NothingStarted) => self.launch_failed(
+                        &i18n::text(&self.config.interface_language, "launch-battlenet-no-game-started"),
+                    ),
                     Err(e) => self.update(Message::Launched(Err(e))),
                 }
             }

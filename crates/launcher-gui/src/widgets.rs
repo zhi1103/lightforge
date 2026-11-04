@@ -540,7 +540,7 @@ pub(crate) fn setting_card<'a>(content: impl Into<Element<'a, Message>>) -> Elem
 }
 
 /// An on/off switch for [`setting`], reachable by the selection ring.
-pub(crate) fn switch<'a>(key: &'static str, on: bool, message: fn(bool) -> Message) -> Element<'a, Message> {
+pub(crate) fn switch<'a>(key: impl Into<String>, on: bool, message: fn(bool) -> Message) -> Element<'a, Message> {
     clickable(
         key,
         iced::widget::toggler(on)

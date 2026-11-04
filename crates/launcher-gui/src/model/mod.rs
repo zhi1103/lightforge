@@ -214,6 +214,7 @@ pub(crate) enum HandoffAct {
 }
 
 impl HandoffAct {
+    #[cfg(test)]
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Play => "dashboard-handoff-play",

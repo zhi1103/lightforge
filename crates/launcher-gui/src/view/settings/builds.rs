@@ -181,7 +181,7 @@ impl Lightforge {
                     i18n::text(language, super::FOLLOWS_CLIENT),
                     tags,
                     self.locked_picker(
-                        ProtonChoice(None, Unpinned::BattleNet).to_string(),
+                        ProtonChoice(None, Unpinned::BattleNet).label(language),
                         Length::Fixed(260.0),
                         theme::BODY,
                     ),

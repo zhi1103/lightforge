@@ -381,6 +381,7 @@ fn the_registry_is_read_again_when_battle_net_changes_it() {
 #[test]
 fn a_game_on_an_absent_drive_is_held_rather_than_played_or_downloaded() {
     let (mut app, _scratch) = test_app();
+    app.config.interface_language = i18n::CHINESE.to_owned();
     app.dirs = None;
     app.queue.clear();
     let code = app.selected.code.clone();
@@ -727,6 +728,7 @@ fn removing_a_game_takes_its_ptr_and_beta_with_it() {
 #[test]
 fn the_last_line_cannot_be_removed_even_with_its_branches_tracked() {
     let (mut app, _scratch) = test_app();
+    app.config.interface_language = i18n::CHINESE.to_owned();
     app.dirs = None;
     app.queue.clear();
 
@@ -1076,7 +1078,8 @@ fn a_launch_waits_for_its_paused_download_to_come_to_rest() {
 
     let _ = app.update(Message::Downloaded(code.clone(), stopped(true)));
     assert_eq!(app.launch_when_quiet, None, "started once the run stopped");
-    assert!(app.status.starts_with("正在启动"), "{}", app.status);
+    let starting = i18n::text(&app.config.interface_language, "launch-starting-game");
+    assert!(app.status.starts_with(&starting), "{}", app.status);
     assert_eq!(app.launching, Some(code), "still this product's session");
 }
 
@@ -1901,7 +1904,53 @@ fn a_launch_that_starts_nothing_says_why_where_it_stays_on_screen() {
     let _ = app.update(Message::HandoffStarted(Ok(tasks::Handoff::NeedsUpdate)));
     assert!(!app.busy);
     let shown = app.error.as_ref().expect("the status line would be overwritten by the reload");
-    assert!(shown.message.contains("press Play"), "{}", shown.message);
+    assert_eq!(
+        shown.message,
+        i18n::text(&app.config.interface_language, "launch-client-wants-managed-update")
+    );
+}
+
+#[test]
+fn failed_battle_net_handoffs_keep_the_localized_error_after_refresh() {
+    let cases = [
+        (
+            tasks::Handoff::Ignored,
+            "launch-client-ignored",
+            "Battle.net 未能启动游戏，请打开 Battle.net 查看原因",
+        ),
+        (
+            tasks::Handoff::NothingStarted,
+            "launch-battlenet-no-game-started",
+            "Battle.net 已打开，但没有启动游戏",
+        ),
+    ];
+
+    for (outcome, message, expected) in cases {
+        let (mut app, _scratch) = test_app();
+        app.dirs = None;
+        app.config.interface_language = i18n::CHINESE.to_owned();
+        app.busy = true;
+        app.launching = Some(ProductCode::Forever);
+
+        let _ = app.update(Message::HandoffStarted(Ok(outcome)));
+        assert!(!app.busy);
+        assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some(expected));
+
+        // A refresh replaces the status line; the launch failure belongs in
+        // the error line so it remains visible after that state update.
+        let _ = app.update(Message::Refreshed(
+            app.selected.code.clone(),
+            Box::new(Refreshed {
+                local: Local::default(),
+                remote: None,
+                bgdl: None,
+                offline: None,
+            }),
+        ));
+
+        assert!(app.status.is_empty(), "the refresh updated the status for {message}");
+        assert_eq!(app.error.as_ref().map(|e| e.message.as_str()), Some(expected));
+    }
 }
 
 #[test]
@@ -1965,7 +2014,10 @@ fn a_game_lightforge_manages_is_never_updated_through_the_client() {
 
     let _ = app.update(Message::HandoffStarted(Ok(tasks::Handoff::NeedsUpdate)));
     assert!(app.client_update.is_none());
-    assert!(app.error.as_ref().is_some_and(|e| e.message.contains("press Play")));
+    assert_eq!(
+        app.error.as_ref().map(|e| e.message.clone()),
+        Some(i18n::text(&app.config.interface_language, "launch-client-wants-managed-update")),
+    );
 }
 
 #[test]

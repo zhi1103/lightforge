@@ -60,13 +60,19 @@ def main() -> int:
     for key in sorted(keys - en.keys()):
         errors.append(f"Rust references missing Fluent message: {key}")
 
-    # Check newly added GUI copy. Existing legacy copy is audited and migrated
-    # directory-by-directory; this guard keeps new literal labels from joining it.
+    # Review the merge against its first parent as well as any current worktree
+    # edits. `git diff HEAD` alone misses every GUI line already committed by
+    # the merge, which is the main surface this audit is meant to cover.
     try:
-        diff = subprocess.run(
+        committed_diff = subprocess.run(
+            ["git", "diff", "57277ef^1", "57277ef", "--unified=0", "--", "crates/launcher-gui/src"],
+            cwd=ROOT, check=True, capture_output=True, text=True,
+        ).stdout
+        worktree_diff = subprocess.run(
             ["git", "diff", "HEAD", "--unified=0", "--", "crates/launcher-gui/src"],
             cwd=ROOT, check=True, capture_output=True, text=True,
         ).stdout
+        diff = committed_diff + "\n" + worktree_diff
     except (OSError, subprocess.CalledProcessError) as error:
         errors.append(f"could not inspect source diff: {error}")
         diff = ""
@@ -81,34 +87,24 @@ def main() -> int:
         if match and re.search(r"[A-Za-z]{2}", match.group(1)):
             errors.append(f"new hard-coded GUI copy: {added.strip()}")
 
-    # Source-copy guard for the header/settings and the explicitly migrated
-    # GUI boundaries: navigation, backup/launch task results, setup progress,
-    # report attachments, wizard pickers, and update state. This checks added
-    # diff lines in those scopes for direct widget/status/error/result copy.
-    # Provider values, paths, commands, protocol labels, logs, CLI/core output,
-    # and arbitrary strings outside these scopes are intentionally out of
-    # bounds. It is not a semantic scan of every string in the crate.
-    scoped = [
-        "crates/launcher-gui/src/view/header/",
-        "crates/launcher-gui/src/view/settings/",
-        "crates/launcher-gui/src/view/companions.rs",
-        "crates/launcher-gui/src/update/",
-        "crates/launcher-gui/src/app/launch.rs",
-        "crates/launcher-gui/src/app/nav.rs",
-        "crates/launcher-gui/src/app/queue.rs",
-        "crates/launcher-gui/src/app/library.rs",
-        "crates/launcher-gui/src/app/launch.rs",
-        "crates/launcher-gui/src/tasks/transfer.rs",
-        "crates/launcher-gui/src/tasks/upgrade.rs",
-        "crates/launcher-gui/src/tasks/backups.rs",
-        "crates/launcher-gui/src/tasks/launch.rs",
-        "crates/launcher-gui/src/provision.rs",
-        "crates/launcher-gui/src/report.rs",
-        "crates/launcher-gui/src/view/dialogs/bug_report.rs",
-        "crates/launcher-gui/src/wizard/update.rs",
-    ]
+    # The merge introduced UI in several areas at once, including Game Tools,
+    # dashboard status, game settings and chooser/dialog flows. Scan every GUI
+    # source path changed by that merge, plus the current worktree edits.
     try:
+        committed_paths = subprocess.run(
+            ["git", "diff", "57277ef^1", "57277ef", "--name-only", "--", "crates/launcher-gui/src"],
+            cwd=ROOT, check=True, capture_output=True, text=True,
+        ).stdout.splitlines()
+        worktree_paths = subprocess.run(
+            ["git", "diff", "HEAD", "--name-only", "--", "crates/launcher-gui/src"],
+            cwd=ROOT, check=True, capture_output=True, text=True,
+        ).stdout.splitlines()
+        scoped = sorted(set(committed_paths + worktree_paths))
         scoped_diff = subprocess.run(
+            ["git", "diff", "57277ef^1", "57277ef", "--unified=0", "--", *scoped],
+            cwd=ROOT, check=True, capture_output=True, text=True,
+        ).stdout
+        scoped_diff += "\n" + subprocess.run(
             ["git", "diff", "HEAD", "--unified=0", "--", *scoped],
             cwd=ROOT, check=True, capture_output=True, text=True,
         ).stdout
