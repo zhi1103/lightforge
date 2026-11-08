@@ -137,6 +137,12 @@ impl Lightforge {
             }
         }
 
+        if !in_wizard {
+            body = body.extend(self.hint(i18n::text(language, "settings-setup-repair-hint")).map(Element::from));
+            if let Some(notice) = &self.repair_notice {
+                body = body.push(muted(notice.clone(), theme::LABEL));
+            }
+        }
         body.push(self.setup_actions(in_wizard)).into()
     }
 
@@ -317,6 +323,15 @@ impl Lightforge {
                 Element::from(
                     secondary(&i18n::text(language, "settings-setup-look-for-games"), Message::Wizard(wizard::Msg::Scan))
                         .enabled(!self.setup_running),
+                )
+            }))
+            // For a client that no longer starts: Re-run setup leaves an
+            // installed one alone.
+            .extend((!in_wizard).then(|| {
+                let installed = self.setup.as_ref().is_some_and(|s| s.battle_net);
+                Element::from(
+                    secondary(&i18n::text(language, "settings-setup-repair-button"), Message::RepairBattleNet)
+                        .enabled(installed && !self.setup_running),
                 )
             }))
             .spacing(theme::SM)

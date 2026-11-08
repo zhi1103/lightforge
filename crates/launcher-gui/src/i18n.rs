@@ -182,6 +182,37 @@ pub(crate) fn error_text(language: &str, message: &str) -> String {
     }
 }
 
+/// Translate the fixed shell of a prefix migration error at the GUI boundary;
+/// paths, filesystem reasons, and operating-system details stay verbatim.
+pub(crate) fn prefix_move_error(language: &str, error: &lightforge_core::prefix_move::PrefixMoveError) -> String {
+    use lightforge_core::prefix_move::PrefixMoveError as E;
+    match error {
+        E::AlreadyThere(path) => text_with_args(language, "settings-storage-prefix-already-there", &[("path", &path.display().to_string())]),
+        E::Away(path) => text_with_args(language, "settings-storage-prefix-missing", &[("path", &path.display().to_string())]),
+        E::Busy(programs) => text_with_args(language, "settings-storage-prefix-busy", &[("programs", &programs.join(", "))]),
+        E::Occupied(path) => text_with_args(language, "settings-storage-prefix-occupied", &[("path", &path.display().to_string())]),
+        E::Overlap { target, prefix } => text_with_args(language, "settings-storage-prefix-overlap", &[("target", &target.display().to_string()), ("prefix", &prefix.display().to_string())]),
+        E::LibraryInside(path) => text_with_args(language, "settings-storage-prefix-library-inside", &[("path", &path.display().to_string())]),
+        E::Unfit { path, reason } => text_with_args(language, "settings-storage-prefix-unfit", &[("path", &path.display().to_string()), ("reason", reason)]),
+        E::NoSpace { path, needed, free } => text_with_args(language, "settings-storage-prefix-no-space", &[("path", &path.display().to_string()), ("needed", &crate::format::size_of(*needed)), ("free", &crate::format::size_of(*free))]),
+        E::Mismatch(path) => text_with_args(language, "settings-storage-prefix-mismatch", &[("path", &path.display().to_string())]),
+        E::Io { path, source } => text_with_args(language, "settings-storage-prefix-io-error", &[("path", &path.display().to_string()), ("error", &source.to_string())]),
+    }
+}
+
+/// Keep nested download and Proton details intact while translating the
+/// fixed repair refusals and release-selection errors.
+pub(crate) fn repair_error(language: &str, error: &lightforge_core::setup::SetupError) -> String {
+    use lightforge_core::setup::SetupError as E;
+    match error {
+        E::NoSuchRelease(version) => text_with_args(language, "settings-setup-no-such-release", &[("version", version)]),
+        E::NoStableRelease => crate::i18n::text(language, "settings-setup-no-stable-release"),
+        E::BattleNetDeclined => crate::i18n::text(language, "settings-setup-battlenet-declined"),
+        E::Busy(programs) => text_with_args(language, "settings-setup-busy", &[("programs", &programs.join(", "))]),
+        other => other.to_string(),
+    }
+}
+
 /// Format a Fluent message with string-valued named arguments.
 pub(crate) fn text_with_args(language: &str, id: &str, args: &[(&str, &str)]) -> String {
     let selected_locale = match language {
@@ -379,6 +410,7 @@ pub(crate) fn transfer_stage(language: &str, stage: &str) -> String {
     let count = |id, value: &str| with(id, &[("count", value)]);
     if stage == "queued" { return text(language, "download-queued"); }
     if stage == "preparing" { return text(language, "download-preparing"); }
+    if stage == "waiting for Battle.net to close" { return crate::i18n::text(language, "transfer-waiting-for-battlenet"); }
     if let Some(value) = stage.strip_prefix("build ") { return with("transfer-build", &[("version", value)]); }
     if let Some(value) = stage.strip_prefix("encoding — ").and_then(|s| s.strip_suffix(" entries")) { return count("transfer-encoding", value); }
     if let Some(value) = stage.strip_prefix("manifests — ").and_then(|s| s.strip_suffix(" entries")) { return count("transfer-manifests", value); }

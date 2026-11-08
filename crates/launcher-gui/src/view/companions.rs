@@ -24,7 +24,7 @@ impl Lightforge {
                 .iter()
                 .enumerate()
                 .filter(|(_, c)| &c.game == game)
-                .map(|(at, c)| companion_row(at, c, &drive_c, &self.config.interface_language));
+                .map(|(at, c)| self.companion_row(at, c, &drive_c));
             body = body.push(column![group_label(self.label_of(game), None), setting_group(rows)].spacing(theme::SM));
         }
 
@@ -61,7 +61,11 @@ impl Lightforge {
                     i18n::text(&self.config.interface_language, "game-tools-add-title"),
                     i18n::text(&self.config.interface_language, "game-tools-add-about"),
                     None,
-                    secondary(&i18n::text(&self.config.interface_language, "game-tools-add-button"), Message::CompanionPick(CompanionPick::Program)).enabled(true),
+                    row![
+                        secondary(&i18n::text(&self.config.interface_language, "game-tools-find-in-prefix"), Message::CompanionFind).enabled(true),
+                        secondary(&i18n::text(&self.config.interface_language, "game-tools-choose-program"), Message::CompanionPick(CompanionPick::Program)).enabled(true),
+                    ]
+                    .spacing(theme::SM),
                 ),
             ]);
         };
@@ -107,29 +111,42 @@ impl Lightforge {
             }
         }
     }
-}
 
-fn companion_row<'a>(at: usize, companion: &Companion, drive_c: &Path, language: &str) -> Element<'a, Message> {
-    let with_game = clickable(
-        i18n::text_with_args(language, "game-tools-toggle-identifier", &[("index", &at.to_string())]),
-        iced::widget::toggler(companion.start_with_game)
-            .label(i18n::text(language, "game-tools-start-with-game"))
-            .on_toggle(move |on| Message::CompanionAutoStart(at, on))
-            .size(theme::tap_text(20.0))
-            .style(theme::switch),
-    );
-    setting(
-        companion.name.clone(),
-        windows_path(&companion.path(drive_c), drive_c),
-        None,
-        row![
-            with_game,
-            secondary(&i18n::text(language, "game-tools-launch"), Message::CompanionLaunch(at)).enabled(true),
-            secondary(&i18n::text(language, "game-tools-remove"), Message::CompanionRemove(at)).enabled(true),
-        ]
-        .spacing(theme::SM)
-        .align_y(Alignment::Center),
-    )
+    /// One program: which game it goes with, starting it with that game,
+    /// and the rest.
+    fn companion_row<'a>(&self, at: usize, companion: &Companion, drive_c: &Path) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
+        let game = self.picker(
+            format!("companion {at} game"),
+            self.choices.clone(),
+            self.choices.iter().find(|c| c.code == companion.game).cloned(),
+            &i18n::text(language, "game-tools-game-label"),
+            move |choice: Choice| Message::CompanionMoved(at, choice.code),
+            Length::Shrink,
+            theme::LABEL,
+        );
+        let with_game = clickable(
+            format!("companion {at} with game"),
+            iced::widget::toggler(companion.start_with_game)
+                .label(i18n::text(language, "game-tools-start-with-game"))
+                .on_toggle(move |on| Message::CompanionAutoStart(at, on))
+                .size(theme::tap_text(20.0))
+                .style(theme::switch),
+        );
+        setting(
+            companion.name.clone(),
+            windows_path(&companion.path(drive_c), drive_c),
+            None,
+            row![
+                game,
+                with_game,
+                secondary(&i18n::text(language, "game-tools-launch"), Message::CompanionLaunch(at)).enabled(true),
+                secondary(&i18n::text(language, "game-tools-remove"), Message::CompanionRemove(at)).enabled(true),
+            ]
+            .spacing(theme::SM)
+            .align_y(Alignment::Center),
+        )
+    }
 }
 
 /// `C:\Program Files\…` for a program in the prefix, as its installer named

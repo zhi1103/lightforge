@@ -98,6 +98,9 @@ impl Lightforge {
                 Task::done(Message::RunSetup)
             }
 
+            // Setup would build a new prefix behind one that is on its way.
+            Message::RunSetup if self.prefix_moving => Task::none(),
+
             Message::RunSetup => {
                 let (tx, rx) = tokio::sync::watch::channel(provision::Progress::default());
                 self.setup_rx = Some(rx);
@@ -114,6 +117,47 @@ impl Lightforge {
                     ),
                     |result| Message::SetupFinished(result.map(Box::new)),
                 )
+            }
+
+            Message::RepairBattleNet => {
+                if self.setup_running || self.locked() {
+                    self.error = Some(i18n::text(&self.config.interface_language, "settings-storage-wait-for-idle").into());
+                    return Ok(Task::none());
+                }
+                if let Some(what) = self.store_writer() {
+                    self.error = Some(i18n::text_with_args(&self.config.interface_language, "settings-storage-wait-for-writer", &[("what", what)]).into());
+                    return Ok(Task::none());
+                }
+                let (tx, rx) = tokio::sync::watch::channel(provision::Progress::default());
+                self.setup_rx = Some(rx);
+                self.setup_sample = provision::Progress::default();
+                self.setup_running = true;
+                self.error = None;
+                self.repair_notice = None;
+                Task::perform(
+                    provision::repair_battle_net(
+                        self.layout.clone(),
+                        self.config.clone(),
+                        self.config.default_proton.version().map(str::to_owned),
+                        tx,
+                    ),
+                    |result| Message::BattleNetRepaired(result.map(Box::new)),
+                )
+            }
+
+            Message::BattleNetRepaired(Err(e)) => {
+                self.setup_running = false;
+                self.setup_rx = None;
+                self.error = Some(e);
+                Task::none()
+            }
+
+            Message::BattleNetRepaired(Ok(repaired)) => {
+                self.repair_notice = Some(match repaired.games.is_empty() {
+                    true => i18n::text(&self.config.interface_language, "settings-setup-repair-done"),
+                    false => i18n::text_with_args(&self.config.interface_language, "settings-setup-repair-done-games", &[("games", &repaired.games.join(", "))]),
+                });
+                self.update(Message::SetupFinished(Ok(Box::new(repaired.status))))
             }
 
             Message::SetupFinished(result) => {

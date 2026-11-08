@@ -22,6 +22,7 @@ impl Lightforge {
                         .map(|earlier| earlier.label.as_str());
                     drives = drives.push(self.drive_card(library, same_disk_as));
                 }
+                drives = drives.push(self.prefix_card(&report.prefix));
                 drives = drives.spacing(theme::SM);
                 drives = drives.extend(self.hint(i18n::text(language, "settings-storage-default-drive-hint")).map(Element::from));
             }
@@ -143,6 +144,44 @@ impl Lightforge {
         card = card.extend(self.unused_rows(library));
         card = card.push(self.drive_actions(library));
         setting_card(card)
+    }
+
+    /// Where the Wine prefix is, and moving it.
+    fn prefix_card<'a>(&'a self, prefix: &'a storage::PrefixUsage) -> Element<'a, Message> {
+        let language = &self.config.interface_language;
+        let free = prefix.disk.map(|disk| i18n::text_with_args(language, "settings-storage-prefix-free", &[("free", &size_of(disk.free))])).unwrap_or_default();
+        let idle = !self.prefix_moving;
+        let mut card = column![setting_group([setting(
+            i18n::text(language, "settings-storage-prefix-title"),
+            match self.layout.prefix_away() {
+                true => i18n::text_with_args(language, "settings-storage-prefix-away", &[("path", &tilde(&prefix.path))]),
+                false => i18n::text_with_args(language, "settings-storage-prefix-details", &[("path", &tilde(&prefix.path)), ("size", &size_of(prefix.bytes)), ("free", &free)]),
+            },
+            None,
+            row![
+                clickable(
+                    "prefix folder",
+                    text_input(&i18n::text(language, "settings-storage-prefix-folder-placeholder"), &self.prefix_folder)
+                        .on_input(Message::PrefixFolderTyped)
+                        .style(theme::field)
+                        .size(theme::BODY)
+                        .padding(theme::SM)
+                        .width(Length::Fixed(240.0)),
+                ),
+                secondary(&i18n::text(language, "settings-storage-prefix-browse"), Message::BrowsePrefixFolder).enabled(idle),
+                secondary(&i18n::text(language, "settings-storage-prefix-move"), Message::MovePrefix).enabled(idle && !self.prefix_folder.trim().is_empty()),
+            ]
+            .spacing(theme::SM)
+            .align_y(Alignment::Center),
+        )])]
+        .spacing(theme::SM);
+        card = card.extend(self.hint(
+            i18n::text(language, "settings-storage-prefix-move-hint"),
+        ).map(Element::from));
+        if let Some(notice) = &self.prefix_notice {
+            card = card.push(muted(notice.clone(), theme::LABEL));
+        }
+        card.into()
     }
 
     /// One row per kind of thing on the drive, with a Clear button where it

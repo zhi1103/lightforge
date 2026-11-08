@@ -152,12 +152,31 @@ impl Lightforge {
                 self.tool_switch("nvidia gpu", true, tweaks.nvidia_gpu, scope, Tweak::NvidiaGpu),
             ));
         }
-        if self.tools.nvidia.is_some() {
+        if self.tools.nvidia_card {
             rows.push(setting(
                 i18n::text(language, "game-settings-nvidia-features"),
                 i18n::text(language, "game-settings-nvidia-features-about"),
                 self.hint(i18n::text(language, "game-settings-nvidia-features-hint")),
-                self.tool_switch("nvapi", true, tweaks.nvapi, scope, Tweak::Nvapi),
+                self.picker(
+                    "nvapi".to_owned(),
+                    lightforge_core::tweaks::Nvapi::ALL
+                        .into_iter()
+                        .map(|choice| DisplayChoice(choice, i18n::text(language, match choice {
+                            lightforge_core::tweaks::Nvapi::Proton => "game-settings-nvapi-proton",
+                            lightforge_core::tweaks::Nvapi::On => "game-settings-nvapi-on",
+                            lightforge_core::tweaks::Nvapi::Off => "game-settings-nvapi-off",
+                        })))
+                        .collect::<Vec<_>>(),
+                    Some(DisplayChoice(tweaks.nvapi, i18n::text(language, match tweaks.nvapi {
+                        lightforge_core::tweaks::Nvapi::Proton => "game-settings-nvapi-proton",
+                        lightforge_core::tweaks::Nvapi::On => "game-settings-nvapi-on",
+                        lightforge_core::tweaks::Nvapi::Off => "game-settings-nvapi-off",
+                    }))),
+                    &i18n::text(language, "game-settings-nvidia-features"),
+                    |choice| Message::NvapiPicked(choice.0),
+                    Length::Fixed(200.0),
+                    theme::BODY,
+                ),
             ));
         }
 
