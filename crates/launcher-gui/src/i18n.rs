@@ -454,6 +454,9 @@ pub(crate) fn addon_progress_line(language: &str, line: &str) -> String {
     if let Some((ok, unavailable)) = line.split_once(" available, ").and_then(|(a,b)| b.strip_suffix(" not").map(|b| (a,b))) {
         return with("addon-progress-resolved", &[("available", ok), ("unavailable", unavailable)]);
     }
+    if let Some((name, size)) = line.strip_prefix("fetching ").and_then(|s| s.strip_suffix('…')).and_then(|s| s.rsplit_once(", ")) {
+        return with("addon-progress-fetching-sized", &[("name", name), ("size", size)]);
+    }
     if let Some(name) = line.strip_prefix("fetching ").and_then(|s| s.strip_suffix('…')) { return with("addon-progress-fetching", &[("name", name)]); }
     if let Some(name) = line.strip_prefix("installed ") { return with("addon-progress-installed", &[("name", name)]); }
     if let Some(name) = line.strip_suffix(" is up to date") { return with("addon-progress-up-to-date", &[("name", name)]); }
@@ -655,6 +658,12 @@ mod tests {
     fn addon_progress_localizes_states_without_changing_addon_names() {
         assert!(addon_progress_line(CHINESE, "resolving 3 addons…").contains("3"));
         assert!(addon_progress_line(CHINESE, "fetching BigWigs…").contains("BigWigs"));
+        let sized = addon_progress_line(CHINESE, "fetching BigWigs, 12.4 MiB…");
+        assert!(sized.contains("BigWigs"));
+        assert!(sized.contains("12.4 MiB"));
+        let sized_english = addon_progress_line(ENGLISH, "fetching BigWigs, 12.4 MiB…");
+        assert!(sized_english.contains("BigWigs"));
+        assert!(sized_english.contains("12.4 MiB"));
         assert!(addon_progress_line(CHINESE, "BigWigs is up to date").contains("BigWigs"));
         assert!(addon_progress_line(CHINESE, "WeakAuras unavailable").contains("WeakAuras"));
     }
